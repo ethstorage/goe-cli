@@ -1,0 +1,38 @@
+{
+  "name": "eths-git-remote",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "git-remote-eths": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "git",
+    "remote",
+    "ethereum",
+    "ethstorage",
+    "git-remote"
+  ],
+  "author": "EthStorage",
+  "license": "MIT",
+  "dependencies": {
+    "@types/url-parse": "^1.4.11",
+    "dotenv": "^16.3.1",
+    "ethers": "^6.12.0",
+    "ethstorage-sdk": "^4.1.3",
+    "superpathjoin": "^2.0.1"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.3"
+  }
+}
