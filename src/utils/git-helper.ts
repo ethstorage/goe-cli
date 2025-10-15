@@ -13,33 +13,42 @@ export function runCmdCapture(args: string[]): Promise<string> {
   });
 }
 
-export async function createPackFile(newOid: string, oldOid?: string): Promise<{ path: string; size: number }> {
+export async function createPackFileBuffer(newOid: string, oldOid?: string): Promise<Buffer> {
   const revs = oldOid ? `${newOid}\n^${oldOid}\n` : `${newOid}\n`;
-  const tmpFile = join(tmpdir(), `pack-${Date.now()}.pack`);
-  const out = fs.createWriteStream(tmpFile);
 
-  const child = spawn("git", ["pack-objects", "--stdout", "--revs", "--thin", "--delta-base-offset"], {
-    stdio: ["pipe", "pipe", "inherit"],
-  });
-  child.stdout.pipe(out);
-  child.stdin.end(Buffer.from(revs, "utf8"));
+  return new Promise<Buffer>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const child = spawn(
+        "git",
+        ["pack-objects", "--stdout", "--revs", "--thin", "--delta-base-offset"],
+        { stdio: ["pipe", "pipe", "inherit"] }
+    );
 
-  await new Promise<void>((resolve, reject) => {
+    child.stdout.on("data", (d) => chunks.push(d));
+    child.on("error", reject);
     child.on("close", (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`pack-objects failed ${code}`));
+      if (code === 0) {
+        resolve(Buffer.concat(chunks));
+      } else {
+        reject(new Error(`git pack-objects exited with code ${code}`));
+      }
     });
+    child.stdin.end(Buffer.from(revs, "utf8"));
   });
-
-  const { size } = fs.statSync(tmpFile);
-  return { path: tmpFile, size };
 }
 
-export function runGitIndexPackFromBuf(buf: Buffer): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn('git', ['index-pack','--stdin','--fix-thin','--keep','-v'], { stdio: ['pipe','inherit','inherit'] });
-    child.on('error', reject);
-    child.on('close', code => code === 0 ? resolve() : reject(new Error('index-pack exit ' + code)));
-    child.stdin.end(buf);
-  });
+export async function getLocalCommitOids(refName: string): Promise<string[]> {
+  const cmd = ["git", "rev-list", "--objects", refName];
+  try {
+    const output = await runCmdCapture(cmd);
+
+    // Git rev-list --objects output：<OID> [path/to/file]
+    const lines = output.trim().split('\n');
+    return lines
+        .filter(line => line.trim() !== '')
+        .map(line => line.split(/\s+/)[0]);
+  } catch (error) {
+    console.error(`Warning: 'git rev-list --objects ${refName}' failed. Assuming no local objects: ${error}`);
+    return [];
+  }
 }

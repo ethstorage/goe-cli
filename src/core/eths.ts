@@ -1,13 +1,28 @@
 import { ethers } from 'ethers';
+import { FlatDirectory } from "ethstorage-sdk";
 import { EthsProtocol, randomRPC } from "../utils/index.js";
 import { ContractDriver } from "../storage/contract.js";
 import { ETHSAbi } from "../config/abis.js";
-import { Ref } from "../storage/types.js";
-import { runCmdCapture, createPackFile } from "../utils/git-helper.js";
+import { Ref, EthsUpdate } from "../storage/types.js";
+import { runCmdCapture, getLocalCommitOids, createPackFileBuffer } from "../utils/git-helper.js";
 
 import { log } from "../utils/log.js"
 import { FetchRef, PushRef } from "../types/api-types.js";
-import { FlatDirectory } from "ethstorage-sdk";
+
+
+
+// TODO
+import path from "path";
+import dotenv from "dotenv";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const envPath = path.resolve(__dirname, "../../.env");
+dotenv.config({ path: envPath });
+
+const privateKey = process.env.pk;
 
 export function getPrivateKey(): string {
     // if (!wallet) wallet = "default"
@@ -23,15 +38,13 @@ export function getPrivateKey(): string {
     //     walletType === "privateKey" ? new ethers.Wallet(key) : ethers.Wallet.fromMnemonic(key)
     //
     // return etherWallet
-
-    // @ts-ignore
-    // TODO
-    return '';
+    if (!privateKey) {
+        throw new Error("pk is not defined in .env");
+    }
+    return privateKey;
 }
 
 class Eths {
-    gitdir: string
-    remoteName: string
     remoteUrl: string
     hubAddress: string
     chainId: number
@@ -39,13 +52,10 @@ class Eths {
 
     refs: Map<string, string> = new Map()
     pushed: Map<string, string> = new Map()
-    fetchPending: Map<string, number> = new Map()
 
     contractDriver: ContractDriver
 
-    constructor(gitdir: string, remoteName: string, protocol: EthsProtocol, contractDriver: ContractDriver) {
-        this.gitdir = gitdir
-        this.remoteName = remoteName
+    constructor(protocol: EthsProtocol, contractDriver: ContractDriver) {
         this.remoteUrl = protocol.remoteUrl
         this.hubAddress = protocol.hubAddress
         this.chainId = protocol.chainId
@@ -56,12 +66,7 @@ class Eths {
         this.pushed = new Map()
     }
 
-    static async create(options: {
-        gitdir: string;
-        remoteName: string;
-        protocol: EthsProtocol
-    }): Promise<Eths> {
-        const { gitdir, remoteName, protocol } = options;
+    static async create(protocol: EthsProtocol): Promise<Eths> {
         const privateKey = getPrivateKey();
 
         const netConfig = protocol.netConfig;
@@ -78,16 +83,17 @@ class Eths {
 
         const wallet = new ethers.Wallet(privateKey);
         const contractDriver = new ContractDriver(rpcUrl, wallet, hubAddress, ETHSAbi, fd);
-        return new Eths(gitdir, remoteName, protocol, contractDriver);
+        return new Eths(protocol, contractDriver);
     }
 
     async doList(forPush: boolean) {
+        console.error("-----doList-----")
         const outLines: string[] = [];
         const refs = await this.getRefs();
 
         for (const ref of refs) {
             if (ref.ref === 'HEAD') {
-                if(!forPush) outLines.push(`@${ref.sha} HEAD\n`);
+                if (!forPush) outLines.push(`@${ref.sha} HEAD\n`);
             } else {
                 outLines.push(`${ref.sha} ${ref.ref}\n`);
             }
@@ -98,9 +104,28 @@ class Eths {
     }
 
     async doFetch(refs: FetchRef[]) {
-        console.error("-----doFetch-----")
-        for (let ref of refs) {
-            await this.fetch(ref.oid)
+        console.error("-----doFetch-----", refs)
+
+        let negotiationRefs: FetchRef[] = [];
+        // clone
+        const cloneFetch = this.getCloneFetch(refs);
+        if (cloneFetch) {
+            const {cloneRef, masterRef} = cloneFetch;
+            negotiationRefs = refs.filter(r =>
+                r !== cloneRef &&
+                r !== masterRef
+            );
+            // add new
+            negotiationRefs.push({
+                oid: cloneRef.oid,
+                ref: masterRef.ref
+            });
+        } else {
+            negotiationRefs = refs.filter(r => r.ref.startsWith('refs/'));
+        }
+
+        for (let ref of negotiationRefs) {
+            await this.fetch(ref.oid, ref.ref)
         }
         log(`done.`);
         return "\n\n"
@@ -149,57 +174,96 @@ class Eths {
         //     }
         // }
 
-        return outLines.join("") + "\n"
+        return outLines.join("") + "\n\n"
     }
 
-    async fetch(oid: string) {
-        if (this.fetchPending.has(oid)) {
-            let cnt = this.fetchPending.get(oid)!
-            this.fetchPending.set(oid, cnt + 1)
-            return
+    getCloneFetch(refs: FetchRef[]) {
+        // fetch 0000000000000000000000000000000000000000 1b18fb0d2ded193ad2442b7a29a9738f11a5afed
+        const cloneRef = refs.find(
+            r => r.oid === '0000000000000000000000000000000000000000' && r.ref.length === 40
+        );
+        if (cloneRef) {
+            // fetch 1b18fb0d2ded193ad2442b7a29a9738f11a5afed refs/heads/master
+            const masterRef = refs.find(r => r.oid === cloneRef.ref);
+            if (masterRef) {
+                return {
+                    cloneRef,
+                    masterRef
+                };
+            } else {
+                throw new Error("Clone initiated but target ref name not found.");
+            }
         }
-        this.fetchPending.set(oid, 1)
-
-        // let fetching: Promise<void>[] = []
-        // if (GitUtils.objectExists(oid)) {
-        //     if (oid == GitUtils.EMPTY_TREE_HASH) {
-        //         GitUtils.writeObject("tree", Buffer.from(""))
-        //     }
-        //     if (!GitUtils.historyExists(oid)) {
-        //         // log("missing part of history from", oid)
-        //         for (let sha of GitUtils.referencedObjects(oid)) {
-        //             fetching.push(this.fetch(sha))
-        //         }
-        //     } else {
-        //         // log("already downloaded", oid)
-        //     }
-        // } else {
-        //     let error = await this.download(oid)
-        //     if (!error) {
-        //         for (let sha of GitUtils.referencedObjects(oid)) {
-        //             fetching.push(this.fetch(sha))
-        //         }
-        //     } else {
-        //         throw error
-        //         //fetching.push(this.fetch(oid))
-        //     }
-        // }
-        // await Promise.all(fetching)
-        // this.fetchPending.set(oid, 0)
+        return null;
     }
 
-    async download(sha: string): Promise<Error | null> {
-        // log("fetching...", sha)
-        // let [status, data] = await this.storage.download(sha) //this.objectPath(sha)
-        // if (status == Status.SUCCEED) {
-        //     let computedSha = GitUtils.decodeObject(data)
-        //     if (computedSha != sha) {
-        //         return new Error(`sha mismatch ${computedSha} != ${sha}`)
-        //     }
-        // } else {
-        //     return new Error(`download failed ${sha}`)
-        // }
-        return null
+    async fetch(haveOid: string, wantRef: string) {
+        const updates = await this.getAllBranchUpdates(wantRef);
+        if (updates.length === 0) {
+            log(`Ref ${wantRef} has no history on remote.`);
+            return this.sendEmptyPackFileResponse();
+        }
+
+        // clone
+        if (haveOid === '0000000000000000000000000000000000000000') {
+            await this.sendPackfiles(updates);
+            return "";
+        }
+
+        //  pull
+        const localOids = await getLocalCommitOids(wantRef);
+        const missingPacks: EthsUpdate[] = [];
+        let foundLocalHead = false;
+        for (let i = updates.length - 1; i >= 0; i--) {
+            const update = updates[i];
+            if (localOids.includes(update.newOid)) {
+                foundLocalHead = true;
+                break;
+            }
+
+            missingPacks.push(update);
+        }
+        if (missingPacks.length === 0 && foundLocalHead) {
+            log(`No new objects to fetch for ${wantRef}.`);
+            return this.sendEmptyPackFileResponse();
+        }
+
+        await this.sendPackfiles(missingPacks.reverse());
+        return "";
+    }
+
+    private async getAllBranchUpdates(refName: string): Promise<EthsUpdate[]> {
+        const allUpdates: EthsUpdate[] = [];
+        const limit = 150;
+        let start = 0;
+        while (true) {
+            const updates = await this.contractDriver.getBranchUpdates(refName, start, limit);
+            if (updates.length === 0) break;
+            allUpdates.push(...updates);
+            start += updates.length;
+        }
+        return allUpdates;
+    }
+
+    private sendEmptyPackFileResponse() {
+        // 'PACK' + 2 (version) + 0 (object count) -> 4 + 4 + 4 = 12 bytes
+        const emptyPack = Buffer.from('5041434b0000000200000000', 'hex');
+        process.stdout.write(emptyPack);
+        return "";
+    }
+
+    private async sendPackfiles(updates: EthsUpdate[]) {
+        log(`Downloading ${updates.length} packfile(s) for branch.`);
+        for (const update of updates) {
+            const packKey = update.packfileKey;
+            log(`progress downloading packfile ${packKey.slice(0, 10)}...`);
+
+            const packData = await this.contractDriver.downloadPackFile(packKey);
+            if (!packData) {
+                throw new Error(`Failed to download packfile ${packKey}`);
+            }
+            process.stdout.write(packData);
+        }
     }
 
     async pushPackFile(src: string, dst: string) {
@@ -208,21 +272,22 @@ class Eths {
             const oldOid = this.refs.get(dst) || "";
 
             // 1. pack file
-            const { path, size } = await createPackFile(newOid, oldOid);
+            const packFile = await createPackFileBuffer(newOid, oldOid);
 
             // 2. upload
+            log('');
             log(`progress start pushing ${dst}`);
-            let status = await this.contractDriver.uploadPack(dst, newOid, path);
+            let status = await this.contractDriver.uploadPack(dst, newOid, packFile);
             if (!status) {
                 return `error ${dst} upload pack file fail`;
             }
 
             // 3. update
-            status = await this.contractDriver.writeRef(dst, {
+            status = await this.contractDriver.writeRef({
                 refName: dst,
                 oldOid: oldOid,
                 newOid: newOid,
-                size: size,
+                size: packFile.length,
             });
             if (!status) {
                 return `error ${dst} update refs fail`;
@@ -253,6 +318,10 @@ class Eths {
             all.push({ ref: 'HEAD', sha: defaultBranchHash });
         }
         return all;
+    }
+
+    async close(): Promise<void> {
+        await this.contractDriver.close();
     }
 }
 

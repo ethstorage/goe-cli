@@ -1,6 +1,5 @@
 import { ethers } from 'ethers';
 import { UploadType, FlatDirectory } from "ethstorage-sdk";
-import { NodeFile } from "ethstorage-sdk/file"
 import { log } from "../utils/log.js"
 import { Update } from "./types.js";
 
@@ -31,7 +30,7 @@ export class ContractDriver {
     }));
   }
 
-  async uploadPack(dst: string, fileKey: string, filePath: string): Promise<boolean> {
+  async uploadPack(dst: string, fileKey: string, packFile: Buffer): Promise<boolean> {
     let status = true;
     let currentSuccessIndex = -1;
     const uploadCallback = {
@@ -41,27 +40,26 @@ export class ContractDriver {
           indexArr.push(i);
         }
         if (isChange) {
-          log(`progress ${dst}: Chunks ${indexArr.join(',')} uploaded`);
+          log(`progress pack file ${dst}: Chunks ${indexArr.join(',')} uploaded`);
         } else {
-          log(`progress ${dst}: Chunks ${indexArr.join(',')} skipped (no change)`);
+          log(`progress pack file ${dst}: Chunks ${indexArr.join(',')} skipped (no change)`);
         }
         currentSuccessIndex = progress;
       },
       onFail: (err: Error) => {
-        console.error(`error: ${dst}: ${err.message}`);
+        log(`error pack file: ${dst}: ${err.message}`);
         status = false;
       },
       onFinish: (totalChunks: number, totalSize: number, totalCost: bigint) => {
-        log(`progress ${dst}: Finished ${totalChunks} chunks, ${totalSize} bytes`);
+        log(`progress pack file ${dst}: Finished ${totalChunks} chunks, ${totalSize} bytes`);
       }
     };
 
     const hashesMap = await this.flatDirectory.fetchHashes([fileKey]);
     const hashes = hashesMap[fileKey];
-    const file = new NodeFile(filePath);
     const request = {
       key: fileKey,
-      content: file,
+      content: packFile,
       chunkHashes: hashes,
       type: UploadType.Blob,
       callback: uploadCallback
@@ -71,17 +69,63 @@ export class ContractDriver {
     return status;
   }
 
-  async writeRef(dst: string, update: Update) {
-    const refNameBytes = ethers.toUtf8Bytes(dst);
-    const tx = await this.contract['pushUpdate'](refNameBytes, {
-      refName: update.refName,
-      oldOid: update.oldOid,
-      newOid: update.newOid,
-      size: update.size,
-    });
+  async writeRef(update: Update) {
+    let {refName, oldOid, newOid, size} = update;
 
-    log(`progress ${dst}: send commit data`);
+    const refNameBytes = ethers.toUtf8Bytes(refName);
+    if (oldOid === '' || oldOid === null || oldOid === undefined) {
+      oldOid = '0x0000000000000000000000000000000000000000';
+    } else if (!oldOid.startsWith('0x')) {
+      oldOid = '0x' + oldOid;
+    }
+    if (newOid && !newOid.startsWith('0x')) {
+      newOid = '0x' + newOid;
+    }
+
+    const tx = await this.contract['pushUpdate'](refNameBytes, oldOid, newOid, size);
+    log(`progress ${refName}: send commit data, hash: ${tx.hash}`);
     const txRsp = await tx.wait();
     return txRsp.status === 1;
+  }
+
+  async getBranchUpdates(refName: string, start: number, limit: number) {
+    const ref = ethers.hexlify(ethers.toUtf8Bytes(refName));
+    const list = await this.contract['getBranchUpdates'](ref, start, limit);
+    return list.map((item: any) => ({
+      refName: ethers.toUtf8String(item.refName),
+      oldOid: item.oldOid.startsWith("0x") ? item.oldOid.slice(2) : item.oldOid,
+      newOid: item.newOid.startsWith("0x") ? item.newOid.slice(2) : item.newOid,
+      packfileKey: item.packfileKey.startsWith("0x") ? item.packfileKey.slice(2) : item.packfileKey,
+      size: Number(item.size),
+      timestamp: Number(item.timestamp),
+      pusher: item.pusher
+    }));
+  }
+
+  async downloadPackFile(fileName: string) {
+    const chunks: Buffer[] = [];
+    return new Promise<Buffer>((resolve, reject) => {
+      let totalSize = 0;
+      this.flatDirectory.download(fileName, {
+        onProgress: (progress, count, chunk) => {
+          chunks.push(Buffer.from(chunk));
+          totalSize += chunk.length;
+          log(`progress Downloading packfile ${fileName.slice(0, 8)}... ${Math.round(progress * 100)}% (${totalSize} bytes)`);
+        },
+        onFail: (e) => {
+          log(`error: Packfile download failed for ${fileName}: ${e.message}`);
+          reject(new Error(`Download failed for packfile ${fileName}`));
+        },
+        onFinish: () => {
+          const fullBuffer = Buffer.concat(chunks);
+          log(`progress Download finished for ${fileName}. Total size: ${fullBuffer.length} bytes.`);
+          resolve(fullBuffer);
+        }
+      });
+    });
+  }
+
+  async close() {
+    await this.flatDirectory.close();
   }
 }
