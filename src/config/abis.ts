@@ -1,6 +1,6 @@
 
 export const ETHSAbi = [
-    "function getDefaultBranch() external view returns (bytes20 hash)",
+    "function getDefaultBranch() external view returns (bytes20 hash, bytes memory name)",
     "function listBranchesPaginated(uint256 start, uint256 limit) view returns (tuple(bytes name, bytes20 hash)[] list)",
     "function pushUpdate(bytes calldata refName, bytes20 oldOid, bytes20 newOid, uint256 fileSize) external",
     "function getRef(bytes calldata refName) external view returns (bytes20)",

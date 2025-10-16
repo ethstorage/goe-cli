@@ -1,7 +1,4 @@
 import { spawn } from 'node:child_process';
-import { tmpdir } from "os";
-import { join } from "path";
-import fs from "fs";
 
 export function runCmdCapture(args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -37,12 +34,32 @@ export async function createPackFileBuffer(newOid: string, oldOid?: string): Pro
   });
 }
 
+export async function runGitIndexPackFromBuf(buf: Buffer, gitDir: string) {
+  return new Promise<void>((resolve, reject) => {
+    const child = spawn(
+        "git",
+        ["index-pack", "--stdin", "--fix-thin", "--keep", "-v"],
+        { cwd: gitDir, stdio: ["pipe", "ignore", "inherit"] }
+    );
+    child.on("error", reject);
+    child.on("close", code => (code === 0 ? resolve() : reject(new Error(`git index-pack exited ${code}`))));
+    child.stdin.end(buf);
+  });
+}
+
 export async function getLocalCommitOids(refName: string): Promise<string[]> {
+  try {
+    await runCmdCapture([
+      "git", "show-ref", "--quiet", "--verify", refName
+    ]);
+  } catch (error) {
+    return [];
+  }
+
   const cmd = ["git", "rev-list", "--objects", refName];
   try {
     const output = await runCmdCapture(cmd);
 
-    // Git rev-list --objects output：<OID> [path/to/file]
     const lines = output.trim().split('\n');
     return lines
         .filter(line => line.trim() !== '')

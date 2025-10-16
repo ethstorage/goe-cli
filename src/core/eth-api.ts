@@ -4,12 +4,13 @@ import Eths from "./eths.js";
 
 let eths: Eths;
 
-export async function createImpl(): Promise<Api> {
+export async function createImpl(env: NodeJS.ProcessEnv): Promise<Api> {
   // init sdk
+  const gitdir = env['GIT_DIR'] || '.git';
   const [, , , remoteUrl] = process.argv
   const protocol = await parseEthsURI(remoteUrl);
 
-  eths = await Eths.create(protocol);
+  eths = await Eths.create(gitdir, protocol);
 
 
   return {
@@ -23,9 +24,7 @@ export async function createImpl(): Promise<Api> {
       return await eths.doFetch(p);
     },
     close: async () => {
-      if (eths && typeof eths.close === 'function') {
-        await eths.close();
-      }
+      await eths.close();
     }
   };
 }

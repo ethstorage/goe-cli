@@ -17,7 +17,6 @@ export default async function GitRemoteHelper({ stdin, api }) {
     map(line => line.split('\n')), mergeMap(lineGroup => lineGroup), 
     // Commands include a trailing newline which we don't need
     map(line => line.trimEnd()), scan((acc, line) => {
-        // console.log('')
         // console.error('====')
         // console.error(line)
         // log('Scanning #NH7FyX', JSON.stringify({ acc, line }))
@@ -104,9 +103,7 @@ export default async function GitRemoteHelper({ stdin, api }) {
             return { command: GitCommands.push, refs };
         }
         throw new Error('Unknown command #Py9QTP');
-    }), 
-    // @ts-ignore
-    asyncMap(async (command) => {
+    }), asyncMap(async (command) => {
         if (command.command === GitCommands.capabilities) {
             return capabilitiesResponse;
         }
@@ -127,6 +124,5 @@ export default async function GitRemoteHelper({ stdin, api }) {
         }
         throw new Error('Unrecognised command #e6nTnS');
     }, 1));
-    // @ts-ignore
     rxToStream(output).pipe(stdout);
 }

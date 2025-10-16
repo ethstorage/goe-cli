@@ -16,10 +16,19 @@ export class ContractDriver {
     this.flatDirectory = flatDirectory;
   }
 
-  async getDefaultBranch(): Promise<string> {
-    let defaultBranchHash = await this.contract['getDefaultBranch']();
-    defaultBranchHash = defaultBranchHash.startsWith('0x') ? defaultBranchHash.slice(2) : defaultBranchHash
-    return defaultBranchHash;
+  async getDefaultBranch(): Promise<{ref: string, sha: string}> {
+    const [sha, ref] = await this.contract['getDefaultBranch']();
+    if (ref.length === 0) {
+      return {
+        ref: '',
+        sha: sha.startsWith('0x') ? sha.slice(2) : sha
+      };
+    }
+
+    return {
+      ref: ethers.toUtf8String(ref),
+      sha: sha.startsWith("0x") ? sha.slice(2) : sha
+    };
   }
 
   async listRefsPaginated(start = 0, limit = 50) {
