@@ -56,7 +56,7 @@ export async function getLocalCommitOids(refName: string): Promise<string[]> {
     return [];
   }
 
-  const cmd = ["git", "rev-list", "--objects", refName];
+  const cmd = ["git", "rev-list", refName];
   try {
     const output = await runCmdCapture(cmd);
 
