@@ -10,8 +10,8 @@ export function runCmdCapture(args: string[]): Promise<string> {
   });
 }
 
-export async function createPackFileBuffer(newOid: string, oldOid?: string): Promise<Buffer> {
-  const revs = oldOid ? `${newOid}\n^${oldOid}\n` : `${newOid}\n`;
+export async function createPackFileBuffer(newOid: string, parentOid?: string): Promise<Buffer> {
+  const revs = parentOid ? `${newOid}\n^${parentOid}\n` : `${newOid}\n`;
 
   return new Promise<Buffer>((resolve, reject) => {
     const chunks: Buffer[] = [];

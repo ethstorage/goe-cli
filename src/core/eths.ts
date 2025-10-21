@@ -164,9 +164,14 @@ class Eths {
                 // force push or delete
                 if (src === "") {
                     // delete
-                    await this.handleBranchDeletion(dst, this.defaultBranch);
-                    outLines.push(`- [deleted] ${dst}`);
-                    this.refs.delete(dst);
+                    const out = await this.handleBranchDeletion(dst, this.defaultBranch);
+                    if (out.indexOf("error") >= 0) {
+                        hasError = true
+                        outLines.push(out + "\n")
+                    } else {
+                        outLines.push(`- [deleted] ${dst}`);
+                        this.refs.delete(dst);
+                    }
                     continue;
                 }
 
@@ -287,10 +292,10 @@ class Eths {
             }
 
             const newOid = (await runCmdCapture(["git", "rev-parse", src])).trim();
-            const oldOid = this.refs.get(dst) || "";
+            const parentOid = this.refs.get(dst) || "";
 
             // 1. pack file
-            const packFile = await createPackFileBuffer(newOid, oldOid);
+            const packFile = await createPackFileBuffer(newOid, parentOid);
 
             // 2. upload
             log('');
@@ -303,7 +308,7 @@ class Eths {
             // 3. update
             status = await this.contractDriver.writeRef({
                 refName: dst,
-                oldOid: oldOid,
+                parentOid: parentOid,
                 newOid: newOid,
                 size: packFile.length,
             });
@@ -320,7 +325,7 @@ class Eths {
 
     private async handleForcePush(src: string, dst: string) {
         try {
-            const hasPusherPerm = await this.contractDriver.hasPushPermission();
+            const hasPusherPerm = await this.contractDriver.hasForcePushPermission(dst);
             if (!hasPusherPerm) {
                 return `error ${dst} no permission`;
             }
@@ -372,7 +377,7 @@ class Eths {
             // 5. update refs
             status = await this.contractDriver.writeForceRef({
                 refName: dst,
-                oldOid: parentOid,
+                parentOid: parentOid,
                 newOid: newOid,
                 size: packFile.length,
                 parentIndex: parentIndex,
@@ -393,18 +398,22 @@ class Eths {
             return `error: cannot delete default branch ${dst}`;
         }
 
-        const hasForcePushPer = await this.contractDriver.hasForcePushPer(dst);
-        if (!hasForcePushPer) {
-            return "error: need maintainer role to delete branches";
-        }
+        try {
+            const hasForcePushPer = await this.contractDriver.hasForcePushPermission(dst);
+            if (!hasForcePushPer) {
+                return "error: need maintainer role to delete branches";
+            }
 
-        await this.contractDriver.writeForceRef({
-            refName: dst,
-            oldOid: '0x0',
-            newOid: '0x0',
-            size: 0,
-            parentIndex: 0,
-        });
+            await this.contractDriver.writeForceRef({
+                refName: dst,
+                parentOid: '0x0',
+                newOid: '0x0',
+                size: 0,
+                parentIndex: 0,
+            });
+        } catch (err: any) {
+            return `error ${dst} ${err.message}`;
+        }
     }
 
     async close(): Promise<void> {
