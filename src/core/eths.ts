@@ -6,7 +6,7 @@ import { mkdirSync, existsSync, writeFileSync } from "fs";
 import { EthsProtocol, randomRPC } from "../utils/index.js";
 import { ContractDriver } from "../storage/contract.js";
 import { ETHSAbi } from "../config/abis.js";
-import { Ref, EthsUpdate } from "../storage/types.js";
+import {Ref, EthsUpdate} from "../storage/types.js";
 import {
     runCmdCapture,
     getLocalCommitOids,
@@ -59,8 +59,8 @@ class Eths {
     chainId: number
     netConfig: Record<string, any>
 
+    defaultBranch!: string;
     refs: Map<string, string> = new Map()
-    pushed: Map<string, string> = new Map()
 
     contractDriver: ContractDriver
 
@@ -73,7 +73,6 @@ class Eths {
         this.contractDriver = contractDriver;
 
         this.refs = new Map()
-        this.pushed = new Map()
     }
 
     static async create(gitdir: string, protocol: EthsProtocol): Promise<Eths> {
@@ -122,9 +121,7 @@ class Eths {
 
         if (headRef) {
             const matchedBranch = branchRefs.find(branch => branch.oid === headRef.oid);
-            if (matchedBranch) {
-                //  remove HEAD branch
-            } else {
+            if (!matchedBranch) {
                 const defaultBranch = await this.contractDriver.getDefaultBranch();
                 const defaultBranchRef = defaultBranch.ref;
                 if (!finalBranchRefs.some(branch => branch.ref === defaultBranchRef)) {
@@ -148,53 +145,69 @@ class Eths {
     async doPush(refs: PushRef[]): Promise<string> {
         console.error("-----doPush-----")
         let outLines: string[] = []
-        // let remoteHead = null
         let hasError = false
         for (let ref of refs) {
-            // TODO permissio check
-            // if (!(await this.storage.hasPermission(ref.dst))) {
-            //     return (
-            //         `error ${ref.dst} refusing to push to remote ${this.remoteUrl} (permission denied)` +
-            //         "\n\n"
-            //     )
-            // }
+            const { src, dst, force = false } = ref;
+            if (!dst.startsWith('refs/heads/')) {
+                const err = `error: refusing to push to non-branch ref ${dst}`;
+                outLines.push(err);
+                hasError = true;
+                continue;
+            }
 
-            if (ref.src == "") {
-                // TODO remove branch
-                // if (this.refs.get("HEAD") == ref.dst) {
-                //     return (
-                //         `error ${ref.dst} refusing to delete the current branch: ${ref.dst}` +
-                //         "\n\n"
-                //     )
-                // }
-                // log(`deleting ref: ${ref.dst}\n`);
-                // this.storage.removeRef(ref.dst)
-                // this.refs.delete(ref.dst)
-                // this.pushed.delete(ref.dst)
+            if (!force) {
+                // fast-forward push
+                let out = await this.handlePush(ref.src, ref.dst)
+                if (out.indexOf("error") >= 0) {hasError = true}
+                outLines.push(out + "\n")
             } else {
-                let out = await this.pushPackFile(ref.src, ref.dst)
+                // force push or delete
+                if (src === "") {
+                    // delete
+                    await this.handleBranchDeletion(dst, this.defaultBranch);
+                    outLines.push(`- [deleted] ${dst}`);
+                    this.refs.delete(dst);
+                    continue;
+                }
+
+                // force push
+                const out = await this.handleForcePush(src, dst);
                 if (out.indexOf("error") >= 0) hasError = true
                 outLines.push(out + "\n")
             }
         }
-
-        // TODO default branch
-        // if (this.refs.size == 0 && !hasError) {
-        //     // first push
-        //     let symbolicRef = GitUtils.symbolicRef("HEAD")
-        //     let err = await this.wirteRef(symbolicRef, "HEAD", true)
-        //     if (err) {
-        //         return `error HEAD ${err}`
-        //     }
-        // }
 
         await this.close();
 
         return outLines.join("") + "\n\n"
     }
 
-    async fetch(wantRef: string) {
-        const updates = await this.getAllBranchUpdates(wantRef);
+    // list
+    private async getRefs(): Promise<Ref[]> {
+        // 1、all branch
+        const pageSize = 150;
+        let start = 0;
+        let all: Ref[] = [];
+        while (true) {
+            const page = await this.contractDriver.listBranches(start, pageSize);
+            if (page.length === 0) break;
+            all.push(...page);
+            start += page.length;
+        }
+
+        // 2. default branch
+        const defaultRef = await this.contractDriver.getDefaultBranch();
+        if (defaultRef && defaultRef.sha !== "0000000000000000000000000000000000000000") {
+            all.push({ ref: 'HEAD', sha: defaultRef.sha });
+            this.defaultBranch = defaultRef.ref;
+        }
+
+        return all;
+    }
+
+    // fetch
+    private async fetch(wantRef: string) {
+        const updates = await this.getAllPushRecords(wantRef);
         if (updates.length === 0) {
             log(`Ref ${wantRef} has no history on remote.`);
             this.sendEmptyPackFileResponse();
@@ -207,7 +220,7 @@ class Eths {
         let foundLocalHead = false;
         for (let i = updates.length - 1; i >= 0; i--) {
             const update = updates[i];
-            if (localOids.includes(update.newOid)) {
+            if (localOids.has(update.newOid)) {
                 foundLocalHead = true;
                 break;
             }
@@ -222,12 +235,12 @@ class Eths {
         await this.sendPackfiles(missingPacks.reverse());
     }
 
-    private async getAllBranchUpdates(refName: string): Promise<EthsUpdate[]> {
+    private async getAllPushRecords(refName: string): Promise<EthsUpdate[]> {
         const allUpdates: EthsUpdate[] = [];
         const limit = 150;
         let start = 0;
         while (true) {
-            const updates = await this.contractDriver.getBranchUpdates(refName, start, limit);
+            const updates = await this.contractDriver.getPushRecords(refName, start, limit);
             if (updates.length === 0) break;
             allUpdates.push(...updates);
             start += updates.length;
@@ -265,8 +278,14 @@ class Eths {
         process.stdout.write("\n");
     }
 
-    async pushPackFile(src: string, dst: string) {
+    // push
+    private async handlePush(src: string, dst: string) {
         try {
+            const hasPusherPerm = await this.contractDriver.hasPushPermission();
+            if (!hasPusherPerm) {
+                return `error ${dst} no permission`;
+            }
+
             const newOid = (await runCmdCapture(["git", "rev-parse", src])).trim();
             const oldOid = this.refs.get(dst) || "";
 
@@ -299,24 +318,93 @@ class Eths {
         }
     }
 
-    async getRefs(): Promise<Ref[]> {
-        // 1、all branch
-        const pageSize = 50;
-        let start = 0;
-        let all: Ref[] = [];
-        while (true) {
-            const page = await this.contractDriver.listRefsPaginated(start, pageSize);
-            if (page.length === 0) break;
-            all.push(...page);
-            start += page.length;
+    private async handleForcePush(src: string, dst: string) {
+        try {
+            const hasPusherPerm = await this.contractDriver.hasPushPermission();
+            if (!hasPusherPerm) {
+                return `error ${dst} no permission`;
+            }
+
+            const newOid = (await runCmdCapture(["git", "rev-parse", src])).trim();
+
+            // 1. get all history
+            const chainRecords = await this.getAllPushRecords(dst);
+            const localOids = await getLocalCommitOids(src);
+
+            // 2. find modify index
+            let commonOid: string | null = null;
+            let commonIndex = -1;
+            for (let i = chainRecords.length - 1; i >= 0; i--) {
+                const record = chainRecords[i];
+                if (localOids.has(record.newOid)) {
+                    commonOid = record.newOid;
+                    commonIndex = i;
+                    break;
+                }
+            }
+
+            // 3. create pack file
+            let packFile: Buffer;
+            let parentOid: string;
+            let parentIndex: number;
+            if (commonOid) {
+                packFile = await createPackFileBuffer(newOid, commonOid);
+                parentOid = commonOid;
+                parentIndex = commonIndex;
+                log(`Force push: partial override (common ancestor: ${commonOid.slice(0, 7)})`);
+            } else {
+                packFile = await createPackFileBuffer(newOid);
+                parentOid = "0x0000000000000000000000000000000000000000";
+                parentIndex = 0;
+                log(`Force push: full override (no common ancestor with remote)`);
+            }
+
+
+            // 4. upload pack file
+            log('');
+            log(`progress start pushing ${dst}`);
+            let status = await this.contractDriver.uploadPack(dst, newOid, packFile);
+            if (!status) {
+                return `error ${dst} upload pack file fail`;
+            }
+
+
+            // 5. update refs
+            status = await this.contractDriver.writeForceRef({
+                refName: dst,
+                oldOid: parentOid,
+                newOid: newOid,
+                size: packFile.length,
+                parentIndex: parentIndex,
+            });
+            if (!status) {
+                return `error ${dst} update refs fail`;
+            }
+
+            this.refs.set(dst, newOid);
+            return `ok ${dst}`;
+        } catch (err: any) {
+            return `error ${dst} ${err.message}`;
+        }
+    }
+
+    private async handleBranchDeletion(dst: string, defaultBranchRef: string) {
+        if (dst === defaultBranchRef) {
+            return `error: cannot delete default branch ${dst}`;
         }
 
-        // 2. default branch
-        const defaultRef = await this.contractDriver.getDefaultBranch();
-        if (defaultRef && defaultRef.sha !== "0000000000000000000000000000000000000000") {
-            all.push({ ref: 'HEAD', sha: defaultRef.sha });
+        const hasForcePushPer = await this.contractDriver.hasForcePushPer(dst);
+        if (!hasForcePushPer) {
+            return "error: need maintainer role to delete branches";
         }
-        return all;
+
+        await this.contractDriver.writeForceRef({
+            refName: dst,
+            oldOid: '0x0',
+            newOid: '0x0',
+            size: 0,
+            parentIndex: 0,
+        });
     }
 
     async close(): Promise<void> {

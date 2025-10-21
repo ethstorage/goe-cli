@@ -47,25 +47,23 @@ export async function runGitIndexPackFromBuf(buf: Buffer, gitDir: string) {
   });
 }
 
-export async function getLocalCommitOids(refName: string): Promise<string[]> {
+export async function getLocalCommitOids(refName: string): Promise<Set<string>> {
   try {
     await runCmdCapture([
       "git", "show-ref", "--quiet", "--verify", refName
     ]);
   } catch (error) {
-    return [];
+    return new Set();
   }
 
   const cmd = ["git", "rev-list", refName];
   try {
     const output = await runCmdCapture(cmd);
 
-    const lines = output.trim().split('\n');
-    return lines
-        .filter(line => line.trim() !== '')
-        .map(line => line.split(/\s+/)[0]);
+    const lines = output.trim().split('\n').filter(line => line.trim() !== '');
+    return new Set(lines.map(line => line.split(/\s+/)[0]));
   } catch (error) {
     console.error(`Warning: 'git rev-list --objects ${refName}' failed. Assuming no local objects: ${error}`);
-    return [];
+    return new Set();
   }
 }

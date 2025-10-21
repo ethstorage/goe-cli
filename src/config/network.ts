@@ -45,7 +45,7 @@ const Networks: Record<number, any> = {
             rbfTimes: 5,
             boardcastTimes: 15,
         },
-        contracts: { factory: "0xe90fB866FDeE198dc9f6561F32151E7B75AfA79a" },
+        contracts: { factory: "0xFDa9bACe3Ed87e40f0017013111186c80ba2cD9C" },
     },
 }
 

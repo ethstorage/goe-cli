@@ -17,7 +17,7 @@ export class ContractDriver {
   }
 
   async getDefaultBranch(): Promise<{ref: string, sha: string}> {
-    const [sha, ref] = await this.contract['getDefaultBranch']();
+    const [ref, sha] = await this.contract['getDefaultBranch']();
     if (ref.length === 0) {
       return {
         ref: '',
@@ -31,12 +31,21 @@ export class ContractDriver {
     };
   }
 
-  async listRefsPaginated(start = 0, limit = 50) {
-    const list = await this.contract['listBranchesPaginated'](start, limit);
+  async listBranches(start = 0, limit = 50) {
+    const list = await this.contract['listBranches'](start, limit);
     return list.map((item: any) => ({
       ref: ethers.toUtf8String(item.name),
       sha: item.hash.startsWith("0x") ? item.hash.slice(2) : item.hash
     }));
+  }
+
+  async hasPushPermission(): Promise<boolean> {
+    return await this.contract['canPush'](this.signer.address);
+  }
+
+  async hasForcePushPer(refName: string): Promise<boolean> {
+    const refNameBytes = ethers.toUtf8Bytes(refName);
+    return await this.contract['canForcePush'](this.signer.address, refNameBytes);
   }
 
   async uploadPack(dst: string, fileKey: string, packFile: Buffer): Promise<boolean> {
@@ -81,6 +90,7 @@ export class ContractDriver {
   async writeRef(update: Update) {
     let {refName, oldOid, newOid, size} = update;
 
+    // "function forcePush(bytes calldata refName, bytes20 newOid, bytes20 packfileKey, uint256 packfileSize, bytes20 parentOid, uint256 parentIndex) external",
     const refNameBytes = ethers.toUtf8Bytes(refName);
     if (oldOid === '' || oldOid === null || oldOid === undefined) {
       oldOid = '0x0000000000000000000000000000000000000000';
@@ -91,19 +101,37 @@ export class ContractDriver {
       newOid = '0x' + newOid;
     }
 
-    const tx = await this.contract['pushUpdate'](refNameBytes, oldOid, newOid, size);
+    const tx = await this.contract['push'](refNameBytes, oldOid, newOid, newOid, size);
     log(`progress ${refName}: send commit data, hash: ${tx.hash}`);
     const txRsp = await tx.wait();
     return txRsp.status === 1;
   }
 
-  async getBranchUpdates(refName: string, start: number, limit: number) {
+  async writeForceRef(update: Update) {
+    let {refName, oldOid, newOid, size, parentIndex} = update;
+
+    const refNameBytes = ethers.toUtf8Bytes(refName);
+    if (oldOid === '' || oldOid === null || oldOid === undefined) {
+      oldOid = '0x0000000000000000000000000000000000000000';
+    } else if (!oldOid.startsWith('0x')) {
+      oldOid = '0x' + oldOid;
+    }
+    if (newOid && !newOid.startsWith('0x')) {
+      newOid = '0x' + newOid;
+    }
+
+    const tx = await this.contract['forcePush'](refNameBytes, newOid, newOid, size, oldOid, parentIndex);
+    log(`progress ${refName}: send commit data, hash: ${tx.hash}`);
+    const txRsp = await tx.wait();
+    return txRsp.status === 1;
+  }
+
+  async getPushRecords(refName: string, start: number, limit: number) {
     const ref = ethers.hexlify(ethers.toUtf8Bytes(refName));
-    const list = await this.contract['getBranchUpdates'](ref, start, limit);
+    const list = await this.contract['getPushRecords'](ref, start, limit);
     return list.map((item: any) => ({
-      refName: ethers.toUtf8String(item.refName),
-      oldOid: item.oldOid.startsWith("0x") ? item.oldOid.slice(2) : item.oldOid,
       newOid: item.newOid.startsWith("0x") ? item.newOid.slice(2) : item.newOid,
+      oldOid: item.oldOid.startsWith("0x") ? item.oldOid.slice(2) : item.oldOid,
       packfileKey: item.packfileKey.startsWith("0x") ? item.packfileKey.slice(2) : item.packfileKey,
       size: Number(item.size),
       timestamp: Number(item.timestamp),

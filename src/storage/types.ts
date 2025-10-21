@@ -3,6 +3,7 @@ export interface Update {
   oldOid: string;         // bytes20
   newOid: string;         // bytes20
   size: number;           // uint256
+  parentIndex?: number;
 }
 
 export type Ref = {
