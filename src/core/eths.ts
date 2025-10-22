@@ -52,6 +52,8 @@ export function getPrivateKey(): string {
     return privateKey;
 }
 
+const ZERO_OID = "0000000000000000000000000000000000000000";
+
 class Eths {
     gitdir: string
     remoteUrl: string
@@ -102,6 +104,7 @@ class Eths {
 
         for (const ref of refs) {
             if (ref.ref === 'HEAD') {
+                // for-push mode usually does not output HEAD, because it is not possible to model to HEAD
                 if (!forPush) outLines.push(`${ref.sha} HEAD\n`);
             } else {
                 outLines.push(`${ref.sha} ${ref.ref}\n`);
@@ -145,40 +148,46 @@ class Eths {
     async doPush(refs: PushRef[]): Promise<string> {
         console.error("-----doPush-----")
         let outLines: string[] = []
-        let hasError = false
+
         for (let ref of refs) {
             const { src, dst, force = false } = ref;
-            if (!dst.startsWith('refs/heads/')) {
-                const err = `error: refusing to push to non-branch ref ${dst}`;
-                outLines.push(err);
-                hasError = true;
-                continue;
-            }
 
-            if (!force) {
+            // internalResult：'ok <ref>' or 'error <ref> <reason>'
+            let internalResult: string;
+            if (!dst.startsWith('refs/heads/')) {
+                // TODO support tag
+                internalResult = `error ${dst} refusing to push to non-branch ref`;
+            } else if (!force) {
                 // fast-forward push
-                let out = await this.handlePush(ref.src, ref.dst)
-                if (out.indexOf("error") >= 0) {hasError = true}
-                outLines.push(out + "\n")
+                internalResult = await this.handlePush(src, dst)
             } else {
                 // force push or delete
                 if (src === "") {
                     // delete
-                    const out = await this.handleBranchDeletion(dst, this.defaultBranch);
-                    if (out.indexOf("error") >= 0) {
-                        hasError = true
-                        outLines.push(out + "\n")
-                    } else {
-                        outLines.push(`- [deleted] ${dst}`);
-                        this.refs.delete(dst);
-                    }
-                    continue;
+                    internalResult = await this.handleBranchDeletion(dst, this.defaultBranch);
+                } else {
+                    // force push
+                    internalResult = await this.handleForcePush(src, dst);
                 }
+            }
 
-                // force push
-                const out = await this.handleForcePush(src, dst);
-                if (out.indexOf("error") >= 0) hasError = true
-                outLines.push(out + "\n")
+            if (internalResult.startsWith("error")) {
+                // error <ref> <reason> -> ng <ref> <reason>
+                const reason = internalResult.slice(6);
+                outLines.push(`ng ${reason}\n`);
+            } else if (internalResult.startsWith("ok")) {
+                // ok <ref> -> ok <ref>
+                const ref = internalResult.slice(3);
+                outLines.push(`ok ${ref}\n`);
+
+                if (src !== "") {
+                    const newOid = (await runCmdCapture(["git", "rev-parse", src])).trim();
+                    this.refs.set(dst, newOid);
+                } else {
+                    this.refs.delete(dst);
+                }
+            } else {
+                outLines.push(`ng ${dst} internal helper error: unknown status\n`);
             }
         }
 
@@ -202,7 +211,7 @@ class Eths {
 
         // 2. default branch
         const defaultRef = await this.contractDriver.getDefaultBranch();
-        if (defaultRef && defaultRef.sha !== "0000000000000000000000000000000000000000") {
+        if (defaultRef && defaultRef.sha !== ZERO_OID) {
             all.push({ ref: 'HEAD', sha: defaultRef.sha });
             this.defaultBranch = defaultRef.ref;
         }
@@ -232,9 +241,11 @@ class Eths {
 
             missingPacks.push(update);
         }
+
         if (missingPacks.length === 0 && foundLocalHead) {
             log(`No new objects to fetch for ${wantRef}.`);
-            return this.sendEmptyPackFileResponse();
+            this.sendEmptyPackFileResponse();
+            return;
         }
 
         await this.sendPackfiles(missingPacks.reverse());
@@ -284,11 +295,11 @@ class Eths {
     }
 
     // push
-    private async handlePush(src: string, dst: string) {
+    private async handlePush(src: string, dst: string): Promise<string> {
         try {
             const hasPusherPerm = await this.contractDriver.hasPushPermission();
             if (!hasPusherPerm) {
-                return `error ${dst} no permission`;
+                return `error ${dst} no push permission`;
             }
 
             const newOid = (await runCmdCapture(["git", "rev-parse", src])).trim();
@@ -316,18 +327,17 @@ class Eths {
                 return `error ${dst} update refs fail`;
             }
 
-            this.refs.set(dst, newOid);
             return `ok ${dst}`;
         } catch (err: any) {
             return `error ${dst} ${err.message}`;
         }
     }
 
-    private async handleForcePush(src: string, dst: string) {
+    private async handleForcePush(src: string, dst: string): Promise<string> {
         try {
             const hasPusherPerm = await this.contractDriver.hasForcePushPermission(dst);
             if (!hasPusherPerm) {
-                return `error ${dst} no permission`;
+                return `error ${dst} no force push permission`;
             }
 
             const newOid = (await runCmdCapture(["git", "rev-parse", src])).trim();
@@ -352,6 +362,7 @@ class Eths {
             let packFile: Buffer;
             let parentOid: string;
             let parentIndex: number;
+
             if (commonOid) {
                 packFile = await createPackFileBuffer(newOid, commonOid);
                 parentOid = commonOid;
@@ -359,7 +370,7 @@ class Eths {
                 log(`Force push: partial override (common ancestor: ${commonOid.slice(0, 7)})`);
             } else {
                 packFile = await createPackFileBuffer(newOid);
-                parentOid = "0x0000000000000000000000000000000000000000";
+                parentOid = ZERO_OID;
                 parentIndex = 0;
                 log(`Force push: full override (no common ancestor with remote)`);
             }
@@ -386,31 +397,35 @@ class Eths {
                 return `error ${dst} update refs fail`;
             }
 
-            this.refs.set(dst, newOid);
             return `ok ${dst}`;
         } catch (err: any) {
             return `error ${dst} ${err.message}`;
         }
     }
 
-    private async handleBranchDeletion(dst: string, defaultBranchRef: string) {
+    private async handleBranchDeletion(dst: string, defaultBranchRef: string): Promise<string> {
         if (dst === defaultBranchRef) {
-            return `error: cannot delete default branch ${dst}`;
+            return `error ${dst} cannot delete default branch`;
         }
 
         try {
             const hasForcePushPer = await this.contractDriver.hasForcePushPermission(dst);
             if (!hasForcePushPer) {
-                return "error: need maintainer role to delete branches";
+                return `error ${dst} no permission to delete branch`;
             }
 
-            await this.contractDriver.writeForceRef({
+            const ok = await this.contractDriver.writeForceRef({
                 refName: dst,
-                parentOid: '0x0',
-                newOid: '0x0',
+                parentOid: ZERO_OID,
+                newOid: ZERO_OID,
                 size: 0,
                 parentIndex: 0,
             });
+            if (!ok) {
+                return `error ${dst} deleted refs fail`;
+            }
+
+            return `ok ${dst}`;
         } catch (err: any) {
             return `error ${dst} ${err.message}`;
         }
