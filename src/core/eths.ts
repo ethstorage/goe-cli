@@ -6,12 +6,12 @@ import { mkdirSync, existsSync, writeFileSync } from "fs";
 import { EthsProtocol, randomRPC } from "../utils/index.js";
 import { ContractDriver } from "../storage/contract.js";
 import { ETHSAbi } from "../config/abis.js";
-import {Ref, EthsUpdate} from "../storage/types.js";
+import { Ref, PushRecord } from "../storage/types.js";
 import {
-    runCmdCapture,
+    getOidFromRef,
     getLocalCommitOids,
     createPackFileBuffer,
-    runGitIndexPackFromBuf
+    runGitIndexPackFromBuf,
 } from "../utils/git-helper.js";
 
 import { log } from "../utils/log.js"
@@ -90,7 +90,8 @@ class Eths {
             ethStorageRpc: ethstorageRpc,
             privateKey,
             address: hubAddress
-        })
+        });
+        fd.setLogEnabled(false);
 
         const wallet = new ethers.Wallet(privateKey);
         const contractDriver = new ContractDriver(rpcUrl, wallet, hubAddress, ETHSAbi, fd);
@@ -181,7 +182,7 @@ class Eths {
                 outLines.push(`ok ${ref}\n`);
 
                 if (src !== "") {
-                    const newOid = (await runCmdCapture(["git", "rev-parse", src])).trim();
+                    const newOid = await getOidFromRef(src);
                     this.refs.set(dst, newOid);
                 } else {
                     this.refs.delete(dst);
@@ -230,7 +231,7 @@ class Eths {
 
         //  pull
         const localOids = await getLocalCommitOids(wantRef);
-        const missingPacks: EthsUpdate[] = [];
+        const missingPacks: PushRecord[] = [];
         let foundLocalHead = false;
         for (let i = updates.length - 1; i >= 0; i--) {
             const update = updates[i];
@@ -251,8 +252,8 @@ class Eths {
         await this.sendPackfiles(missingPacks.reverse());
     }
 
-    private async getAllPushRecords(refName: string): Promise<EthsUpdate[]> {
-        const allUpdates: EthsUpdate[] = [];
+    private async getAllPushRecords(refName: string): Promise<PushRecord[]> {
+        const allUpdates: PushRecord[] = [];
         const limit = 150;
         let start = 0;
         while (true) {
@@ -270,15 +271,13 @@ class Eths {
         process.stdout.write(emptyPack);
     }
 
-    private async sendPackfiles(updates: EthsUpdate[]) {
+    private async sendPackfiles(updates: PushRecord[]) {
         const packDir = join(this.gitdir, "objects", "pack");
         if (!existsSync(packDir)) mkdirSync(packDir, { recursive: true });
 
-        log(`Downloading ${updates.length} packfile(s) for branch.`);
+        log(`[INFO] Downloading ${updates.length} packfile(s) for branch...`);
         for (const update of updates) {
             const packKey = update.packfileKey;
-            log(`progress downloading packfile ${packKey.slice(0, 10)}...`);
-
             const packData = await this.contractDriver.downloadPackFile(packKey);
             if (!packData) {
                 throw new Error(`Failed to download packfile ${packKey}`);
@@ -302,7 +301,7 @@ class Eths {
                 return `error ${dst} no push permission`;
             }
 
-            const newOid = (await runCmdCapture(["git", "rev-parse", src])).trim();
+            const newOid = await getOidFromRef(src);
             const parentOid = this.refs.get(dst) || "";
 
             // 1. pack file
@@ -310,7 +309,7 @@ class Eths {
 
             // 2. upload
             log('');
-            log(`progress start pushing ${dst}`);
+            log(`[PROGRESS] Uploading packfile (Size: ${packFile.length} bytes) to EthStorage...`);
             let status = await this.contractDriver.uploadPack(dst, newOid, packFile);
             if (!status) {
                 return `error ${dst} upload pack file fail`;
@@ -340,7 +339,7 @@ class Eths {
                 return `error ${dst} no force push permission`;
             }
 
-            const newOid = (await runCmdCapture(["git", "rev-parse", src])).trim();
+            const newOid = await getOidFromRef(src);
 
             // 1. get all history
             const chainRecords = await this.getAllPushRecords(dst);
@@ -367,18 +366,18 @@ class Eths {
                 packFile = await createPackFileBuffer(newOid, commonOid);
                 parentOid = commonOid;
                 parentIndex = commonIndex;
-                log(`Force push: partial override (common ancestor: ${commonOid.slice(0, 7)})`);
+                log(`[INFO] Force push: Partial override (Ancestor: ${parentOid}, Index: ${parentIndex})`);
             } else {
                 packFile = await createPackFileBuffer(newOid);
                 parentOid = ZERO_OID;
                 parentIndex = 0;
-                log(`Force push: full override (no common ancestor with remote)`);
+                log(`[INFO] Force push: Full override (No common ancestor).`);
             }
 
 
             // 4. upload pack file
             log('');
-            log(`progress start pushing ${dst}`);
+            log(`[PROGRESS] Uploading packfile (Size: ${packFile.length} bytes) to EthStorage...`);
             let status = await this.contractDriver.uploadPack(dst, newOid, packFile);
             if (!status) {
                 return `error ${dst} upload pack file fail`;

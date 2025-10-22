@@ -1,3 +1,4 @@
+import { ethers, BaseContract, ContractTransactionResponse, BytesLike, BigNumberish } from 'ethers';
 export interface Update {
     refName: string;
     parentOid: string;
@@ -9,12 +10,26 @@ export type Ref = {
     ref: string;
     sha: string;
 };
-export interface EthsUpdate {
-    refName: string;
-    parentOid: string;
+interface BranchInfo {
+    name: ethers.BytesLike;
+    hash: string;
+}
+export interface PushRecord {
     newOid: string;
+    parentOid: string;
     packfileKey: string;
-    size: number;
-    timestamp: number;
+    size: BigNumberish;
+    timestamp: BigNumberish;
     pusher: string;
 }
+export interface GitContract extends BaseContract {
+    getDefaultBranch(): Promise<[ethers.BytesLike, string]>;
+    listBranches(start: BigNumberish, limit: BigNumberish): Promise<BranchInfo[]>;
+    canPush(account: string): Promise<boolean>;
+    canForcePush(account: string, refName: BytesLike): Promise<boolean>;
+    getBranchHead(refName: BytesLike): Promise<[string, boolean]>;
+    getPushRecords(refName: BytesLike, start: BigNumberish, limit: BigNumberish): Promise<PushRecord[]>;
+    push(refName: BytesLike, parentOid: BytesLike, newOid: BytesLike, packfileKey: BytesLike, packfileSize: BigNumberish): Promise<ContractTransactionResponse>;
+    forcePush(refName: BytesLike, newOid: BytesLike, packfileKey: BytesLike, packfileSize: BigNumberish, parentOid: BytesLike, parentIndex: BigNumberish): Promise<ContractTransactionResponse>;
+}
+export {};

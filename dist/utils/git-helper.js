@@ -1,56 +1,65 @@
 import { spawn } from 'node:child_process';
-export function runCmdCapture(args) {
+function spawnWithOutput(command, args, options, input) {
     return new Promise((resolve, reject) => {
-        const child = spawn(args[0], args.slice(1), { stdio: ['ignore', 'pipe', 'inherit'] });
-        let buf = '';
-        child.stdout.on('data', d => buf += d.toString());
+        const child = spawn(command, args, options);
+        const chunks = [];
+        if (!child.stdout)
+            return reject(new Error(`stdout not piped for ${command}`));
+        child.stdout.on('data', (chunk) => chunks.push(chunk));
         child.on('error', reject);
-        child.on('close', code => code === 0 ? resolve(buf) : reject(new Error('cmd exit ' + code)));
+        child.on('close', (code, signal) => {
+            if (code === 0)
+                resolve(Buffer.concat(chunks));
+            else
+                reject(new Error(`Command "${command} ${args.join(' ')}" exited ${code ?? signal}`));
+        });
+        if (child.stdin)
+            child.stdin.end(input);
     });
 }
+function spawnNoOutput(command, args, options = {}, input) {
+    const adjusted = {
+        ...options,
+        stdio: options.stdio ?? ['pipe', 'ignore', 'inherit'],
+    };
+    return new Promise((resolve, reject) => {
+        const child = spawn(command, args, adjusted);
+        child.on('error', reject);
+        child.on('close', (code, signal) => code === 0 ? resolve() : reject(new Error(`Command "${command} ${args.join(' ')}" exited ${code ?? signal}`)));
+        if (child.stdin)
+            child.stdin.end(input);
+    });
+}
+async function runCmdCapture(args) {
+    const buf = await spawnWithOutput(args[0], args.slice(1), { stdio: ['ignore', 'pipe', 'inherit'] });
+    return buf.toString('utf8');
+}
+// --- Git Tool Functions ---
 export async function createPackFileBuffer(newOid, parentOid) {
     const revs = parentOid ? `${newOid}\n^${parentOid}\n` : `${newOid}\n`;
-    return new Promise((resolve, reject) => {
-        const chunks = [];
-        const child = spawn("git", ["pack-objects", "--stdout", "--revs", "--thin", "--delta-base-offset"], { stdio: ["pipe", "pipe", "inherit"] });
-        child.stdout.on("data", (d) => chunks.push(d));
-        child.on("error", reject);
-        child.on("close", (code) => {
-            if (code === 0) {
-                resolve(Buffer.concat(chunks));
-            }
-            else {
-                reject(new Error(`git pack-objects exited with code ${code}`));
-            }
-        });
-        child.stdin.end(Buffer.from(revs, "utf8"));
-    });
+    return spawnWithOutput('git', ['pack-objects', '--stdout', '--revs', '--thin', '--delta-base-offset'], { stdio: ['pipe', 'pipe', 'inherit'] }, Buffer.from(revs, 'utf8'));
 }
 export async function runGitIndexPackFromBuf(buf, gitDir) {
-    return new Promise((resolve, reject) => {
-        const child = spawn("git", ["index-pack", "--stdin", "--fix-thin", "--keep", "-v"], { cwd: gitDir, stdio: ["pipe", "ignore", "inherit"] });
-        child.on("error", reject);
-        child.on("close", code => (code === 0 ? resolve() : reject(new Error(`git index-pack exited ${code}`))));
-        child.stdin.end(buf);
-    });
+    return spawnNoOutput('git', ['index-pack', '--stdin', '--fix-thin', '--keep', '-v'], { cwd: gitDir, stdio: ['pipe', 'ignore', 'inherit'] }, buf);
 }
 export async function getLocalCommitOids(refName) {
     try {
-        await runCmdCapture([
-            "git", "show-ref", "--quiet", "--verify", refName
-        ]);
+        await spawnNoOutput('git', ['show-ref', '--quiet', '--verify', refName]);
     }
-    catch (error) {
+    catch {
         return new Set();
     }
-    const cmd = ["git", "rev-list", refName];
     try {
-        const output = await runCmdCapture(cmd);
-        const lines = output.trim().split('\n').filter(line => line.trim() !== '');
-        return new Set(lines.map(line => line.split(/\s+/)[0]));
+        const output = await runCmdCapture(['git', 'rev-list', refName]);
+        return new Set(output.trim().split('\n').filter(Boolean));
     }
-    catch (error) {
-        console.error(`Warning: 'git rev-list --objects ${refName}' failed. Assuming no local objects: ${error}`);
+    catch (err) {
+        console.error(`Warning: 'git rev-list ${refName}' failed: ${err}`);
         return new Set();
     }
+}
+export async function getOidFromRef(refName) {
+    const args = ["git", "rev-parse", refName];
+    const output = await runCmdCapture(args);
+    return output.trim();
 }

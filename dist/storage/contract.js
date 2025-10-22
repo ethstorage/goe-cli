@@ -1,6 +1,27 @@
 import { ethers } from 'ethers';
 import { UploadType } from "ethstorage-sdk";
 import { log } from "../utils/log.js";
+const ZERO_ADDRESS_HEX = '0x0000000000000000000000000000000000000000';
+const MAX_RPC_RETRIES = 3;
+const RPC_RETRY_DELAY_MS = 1000;
+async function withRetry(methodName, fn, isWrite = false) {
+    for (let attempt = 1; attempt <= MAX_RPC_RETRIES; attempt++) {
+        try {
+            return await fn();
+        }
+        catch (error) {
+            if (attempt === MAX_RPC_RETRIES) {
+                log(`[ERROR] RPC call ${methodName} failed after ${MAX_RPC_RETRIES} attempts.`);
+                throw error;
+            }
+            const errorType = isWrite ? 'Transaction' : 'Read';
+            log(`[WARN] ${errorType} call ${methodName} failed (Attempt ${attempt}/${MAX_RPC_RETRIES}). Retrying in ${RPC_RETRY_DELAY_MS}ms. Error: ${error.message}`);
+            await new Promise(resolve => setTimeout(resolve, RPC_RETRY_DELAY_MS));
+        }
+    }
+    // Should be unreachable
+    throw new Error(`Exceeded max retries for ${methodName}`);
+}
 export class ContractDriver {
     provider;
     signer;
@@ -12,60 +33,121 @@ export class ContractDriver {
         this.contract = new ethers.Contract(contractAddr, abi, this.signer);
         this.flatDirectory = flatDirectory;
     }
+    // --- Utility Methods ---
+    toHex(oid) {
+        if (!oid)
+            return ZERO_ADDRESS_HEX;
+        const cleanOid = oid.replace(/^0x/i, '');
+        // Ensures 40-byte hash padding for safety
+        return '0x' + cleanOid.padStart(40, '0');
+    }
+    fromHex(hash) {
+        return hash.startsWith('0x') ? hash.slice(2) : hash;
+    }
+    // --- Read Operations (with Retry) ---
     async getDefaultBranch() {
-        const [ref, sha] = await this.contract['getDefaultBranch']();
-        if (ref.length === 0) {
+        const [refBytes, shaHex] = await withRetry("getDefaultBranch", () => this.contract.getDefaultBranch());
+        if (refBytes.length === 0) {
             return {
                 ref: '',
-                sha: sha.startsWith('0x') ? sha.slice(2) : sha
+                sha: this.fromHex(shaHex)
             };
         }
         return {
-            ref: ethers.toUtf8String(ref),
-            sha: sha.startsWith("0x") ? sha.slice(2) : sha
+            ref: ethers.toUtf8String(refBytes),
+            sha: this.fromHex(shaHex)
         };
     }
     async listBranches(start = 0, limit = 50) {
-        const list = await this.contract['listBranches'](start, limit);
+        const list = await withRetry("listBranches", () => this.contract.listBranches(start, limit));
         return list.map((item) => ({
             ref: ethers.toUtf8String(item.name),
-            sha: item.hash.startsWith("0x") ? item.hash.slice(2) : item.hash
+            sha: this.fromHex(item.hash)
         }));
     }
     async hasPushPermission() {
-        return await this.contract['canPush'](this.signer.address);
+        return await withRetry("canPush", () => this.contract.canPush(this.signer.address));
     }
     async hasForcePushPermission(refName) {
         const refNameBytes = ethers.toUtf8Bytes(refName);
-        return await this.contract['canForcePush'](this.signer.address, refNameBytes);
+        return await withRetry("canForcePush", () => this.contract.canForcePush(this.signer.address, refNameBytes));
     }
+    async getPushRecords(refName, start, limit) {
+        const refNameBytes = ethers.toUtf8Bytes(refName);
+        const list = await withRetry("getPushRecords", () => this.contract.getPushRecords(refNameBytes, start, limit));
+        return list.map((item) => ({
+            newOid: this.fromHex(item.newOid),
+            parentOid: this.fromHex(item.parentOid),
+            packfileKey: this.fromHex(item.packfileKey),
+            size: Number(item.size),
+            timestamp: Number(item.timestamp),
+            pusher: item.pusher
+        }));
+    }
+    // --- Write Operations (with Retry) ---
+    async writeRef(update) {
+        const { refName, parentOid, newOid, size } = update;
+        const refNameBytes = ethers.toUtf8Bytes(refName);
+        const parentOidHex = this.toHex(parentOid);
+        const newOidHex = this.toHex(newOid);
+        const tx = await withRetry("push", async () => {
+            return await this.contract.push(refNameBytes, parentOidHex, newOidHex, newOidHex, size);
+        }, true);
+        log(`[INFO] ${refName}: Sending push transaction, hash: ${tx.hash}`);
+        const txRsp = await withRetry("push.wait", () => tx.wait(), true);
+        const success = txRsp?.status === 1;
+        if (!success) {
+            log(`[ERROR] ${refName}: Transaction failed on chain (status ${txRsp?.status}).`);
+        }
+        return success;
+    }
+    async writeForceRef(update) {
+        const { refName, parentOid, newOid, size } = update;
+        const parentIndex = update.parentIndex ?? 0;
+        const refNameBytes = ethers.toUtf8Bytes(refName);
+        const parentOidHex = this.toHex(parentOid);
+        const newOidHex = this.toHex(newOid);
+        const tx = await withRetry("forcePush", async () => {
+            return await this.contract.forcePush(refNameBytes, newOidHex, newOidHex, size, parentOidHex, parentIndex);
+        }, true);
+        log(`[INFO] ${refName}: Sending forcePush transaction, hash: ${tx.hash}`);
+        const txRsp = await withRetry("forcePush.wait", () => tx.wait(), true);
+        const success = txRsp?.status === 1;
+        if (!success) {
+            log(`[ERROR] ${refName}: Force push transaction failed on chain (status ${txRsp?.status}).`);
+        }
+        return success;
+    }
+    // --- FlatDirectory Operations (No RPC Retry - relies on FlatDirectory internal retry) ---
     async uploadPack(dst, fileKey, packFile) {
         let status = true;
         let currentSuccessIndex = -1;
         const uploadCallback = {
+            onTransactionSent: (txHash, chunkIds) => {
+                log(`[INFO] pack file ${dst}: Chunks ${chunkIds} Tx Hash: ${txHash}`);
+            },
             onProgress: (progress, total, isChange) => {
-                const indexArr = [];
+                // Simplified logging logic for progress changes
+                const completedIndices = [];
                 for (let i = currentSuccessIndex + 1; i <= progress; i++) {
-                    indexArr.push(i);
+                    completedIndices.push(i);
                 }
-                if (isChange) {
-                    log(`progress pack file ${dst}: Chunks ${indexArr.join(',')} uploaded`);
-                }
-                else {
-                    log(`progress pack file ${dst}: Chunks ${indexArr.join(',')} skipped (no change)`);
+                if (completedIndices.length > 0) {
+                    const action = isChange ? 'uploaded' : 'skipped (no change)';
+                    log(`[PROGRESS] pack file ${dst}: Chunks ${completedIndices.join(',')} ${action}`);
                 }
                 currentSuccessIndex = progress;
             },
             onFail: (err) => {
-                log(`error pack file: ${dst}: ${err.message}`);
+                log(`[ERROR] pack file ${dst}: ${err.message}`);
                 status = false;
             },
             onFinish: (totalChunks, totalSize, totalCost) => {
-                log(`progress pack file ${dst}: Finished ${totalChunks} chunks, ${totalSize} bytes`);
+                log(`[INFO] pack file ${dst}: Finished ${totalChunks} chunks, ${totalSize} bytes. Total Cost: ${totalCost}`);
             }
         };
         const hashesMap = await this.flatDirectory.fetchHashes([fileKey]);
-        const hashes = hashesMap[fileKey];
+        const hashes = hashesMap[fileKey] || [];
         const request = {
             key: fileKey,
             content: packFile,
@@ -73,54 +155,9 @@ export class ContractDriver {
             type: UploadType.Blob,
             callback: uploadCallback
         };
+        // Rely on flatDirectory.upload's internal retry mechanism
         await this.flatDirectory.upload(request);
         return status;
-    }
-    async writeRef(update) {
-        let { refName, parentOid, newOid, size } = update;
-        const refNameBytes = ethers.toUtf8Bytes(refName);
-        if (parentOid === '' || parentOid === null || parentOid === undefined) {
-            parentOid = '0x0000000000000000000000000000000000000000';
-        }
-        else if (!parentOid.startsWith('0x')) {
-            parentOid = '0x' + parentOid;
-        }
-        if (newOid && !newOid.startsWith('0x')) {
-            newOid = '0x' + newOid;
-        }
-        const tx = await this.contract['push'](refNameBytes, parentOid, newOid, newOid, size);
-        log(`progress ${refName}: send commit data, hash: ${tx.hash}`);
-        const txRsp = await tx.wait();
-        return txRsp.status === 1;
-    }
-    async writeForceRef(update) {
-        let { refName, parentOid, newOid, size, parentIndex } = update;
-        const refNameBytes = ethers.toUtf8Bytes(refName);
-        if (parentOid === '' || parentOid === null || parentOid === undefined) {
-            parentOid = '0x0000000000000000000000000000000000000000';
-        }
-        else if (!parentOid.startsWith('0x')) {
-            parentOid = '0x' + parentOid;
-        }
-        if (newOid && !newOid.startsWith('0x')) {
-            newOid = '0x' + newOid;
-        }
-        const tx = await this.contract['forcePush'](refNameBytes, newOid, newOid, size, parentOid, parentIndex);
-        log(`progress ${refName}: send commit data, hash: ${tx.hash}`);
-        const txRsp = await tx.wait();
-        return txRsp.status === 1;
-    }
-    async getPushRecords(refName, start, limit) {
-        const ref = ethers.hexlify(ethers.toUtf8Bytes(refName));
-        const list = await this.contract['getPushRecords'](ref, start, limit);
-        return list.map((item) => ({
-            newOid: item.newOid.startsWith("0x") ? item.newOid.slice(2) : item.newOid,
-            parentOid: item.parentOid.startsWith("0x") ? item.parentOid.slice(2) : item.parentOid,
-            packfileKey: item.packfileKey.startsWith("0x") ? item.packfileKey.slice(2) : item.packfileKey,
-            size: Number(item.size),
-            timestamp: Number(item.timestamp),
-            pusher: item.pusher
-        }));
     }
     async downloadPackFile(fileName) {
         const chunks = [];
@@ -130,15 +167,15 @@ export class ContractDriver {
                 onProgress: (progress, count, chunk) => {
                     chunks.push(Buffer.from(chunk));
                     totalSize += chunk.length;
-                    log(`progress Downloading packfile ${fileName.slice(0, 8)}... ${Math.round(progress * 100)}% (${totalSize} bytes)`);
+                    log(`[PROGRESS] Downloading packfile ${fileName.slice(0, 8)}... ${Math.round(progress * 100)}% (${totalSize} bytes)`);
                 },
                 onFail: (e) => {
-                    log(`error: Packfile download failed for ${fileName}: ${e.message}`);
+                    log(`[ERROR] Packfile download failed for ${fileName}: ${e.message}`);
                     reject(new Error(`Download failed for packfile ${fileName}`));
                 },
                 onFinish: () => {
                     const fullBuffer = Buffer.concat(chunks);
-                    log(`progress Download finished for ${fileName}. Total size: ${fullBuffer.length} bytes.`);
+                    log(`[INFO] Download finished for ${fileName}. Total size: ${fullBuffer.length} bytes.`);
                     resolve(fullBuffer);
                 }
             });
