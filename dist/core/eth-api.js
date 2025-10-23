@@ -1,9 +1,14 @@
+import * as path from 'path';
 import { parseEthsURI } from "../utils/index.js";
 import Eths from "./eths.js";
 let eths;
 export async function createImpl(env) {
     // init sdk
-    const gitdir = env['GIT_DIR'] || '.git';
+    let gitDirCandidate = env['GIT_DIR'];
+    if (!gitDirCandidate) {
+        gitDirCandidate = '.git';
+    }
+    const gitdir = path.resolve(gitDirCandidate);
     const [, , , remoteUrl] = process.argv;
     const protocol = await parseEthsURI(remoteUrl);
     eths = await Eths.create(gitdir, protocol);

@@ -1,3 +1,4 @@
+import * as path from 'path';
 import { Api } from '../types/api-types.js';
 import { parseEthsURI } from "../utils/index.js";
 import Eths from "./eths.js";
@@ -6,7 +7,11 @@ let eths: Eths;
 
 export async function createImpl(env: NodeJS.ProcessEnv): Promise<Api> {
   // init sdk
-  const gitdir = env['GIT_DIR'] || '.git';
+  let gitDirCandidate = env['GIT_DIR'];
+  if (!gitDirCandidate) {
+    gitDirCandidate = '.git';
+  }
+  const gitdir  = path.resolve(gitDirCandidate);
   const [, , , remoteUrl] = process.argv
   const protocol = await parseEthsURI(remoteUrl);
 

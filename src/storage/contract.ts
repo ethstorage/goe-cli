@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { finished } from 'node:stream/promises';
 import { ethers } from 'ethers';
 import { UploadType, FlatDirectory } from "ethstorage-sdk";
 import { log } from "../utils/log.js"
@@ -218,32 +219,30 @@ export class ContractDriver {
     await withRetry("downloadPackFile", async () => {
       await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
 
+      let totalSize = 0;
       await new Promise<void>((resolve, reject) => {
         const writeStream = fs.createWriteStream(filePath);
-        let totalSize = 0;
-        const cleanup = (err?: Error) => {
+        writeStream.on('error', (err) => {
           writeStream.destroy();
-          if (err) {
-            try { fs.unlinkSync(filePath); } catch {}
-            reject(err);
-          }
-        };
+          try { fs.unlinkSync(filePath); } catch {}
+          reject(err);
+        });
 
         this.flatDirectory.download(fileName, {
           onProgress: (progress, count, chunk) => {
             totalSize += chunk.length;
             writeStream.write(chunk);
           },
-          onFail: e => {
-            cleanup(e);
-          },
-          onFinish: () => {
-            log(`[INFO] Download finished for ${fileName}. Total size: ${totalSize} bytes.`);
-            writeStream.end(() => resolve());
-          }
+          onFail: (err: Error) => reject(err),
+          onFinish: () => writeStream.end()
         });
 
-        writeStream.on('error', cleanup);
+        finished(writeStream)
+            .then(() => {
+              log(`[INFO] Download finished for ${fileName}. Total size: ${totalSize} bytes.`);
+              resolve();
+            })
+            .catch(reject);
       });
     });
 

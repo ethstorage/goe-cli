@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { finished } from 'node:stream/promises';
 import { ethers } from 'ethers';
 import { UploadType } from "ethstorage-sdk";
 import { log } from "../utils/log.js";
@@ -130,27 +131,28 @@ export class ContractDriver {
         let status = true;
         let currentSuccessIndex = -1;
         const uploadCallback = {
-            onTransactionSent: (txHash, chunkIds) => {
-                log(`[INFO] pack file ${dst}: Chunks ${chunkIds} Tx Hash: ${txHash}`);
+            onTransactionSent: (txHash) => {
+                log(`[INFO] Upload tx sent: ${txHash}`);
             },
             onProgress: (progress, total, isChange) => {
-                // Simplified logging logic for progress changes
-                const completedIndices = [];
-                for (let i = currentSuccessIndex + 1; i <= progress; i++) {
-                    completedIndices.push(i);
-                }
-                if (completedIndices.length > 0) {
-                    const action = isChange ? 'uploaded' : 'skipped (no change)';
-                    log(`[PROGRESS] pack file ${dst}: Chunks ${completedIndices.join(',')} ${action}`);
-                }
+                const start = currentSuccessIndex + 1;
+                const end = progress;
+                if (start > end)
+                    return;
                 currentSuccessIndex = progress;
+                if (isChange) {
+                    log(`[PROGRESS] pack file ${dst}: Uploaded chunks ${start}-${end}`);
+                }
+                else {
+                    log(`[PROGRESS] pack file ${dst}: Chunks ${start}-${end} skipped (no change)`);
+                }
             },
             onFail: (err) => {
                 log(`[ERROR] pack file ${dst}: ${err.message}`);
                 status = false;
             },
             onFinish: (totalChunks, totalSize, totalCost) => {
-                log(`[INFO] pack file ${dst}: Finished ${totalChunks} chunks, ${totalSize} bytes. Total Cost: ${totalCost}`);
+                log(`[INFO] Upload finished: ${totalChunks} chunks, ${totalSize} bytes`);
             }
         };
         const hashesMap = await this.flatDirectory.fetchHashes([fileKey]);
@@ -169,33 +171,31 @@ export class ContractDriver {
     async downloadPackFile(fileName, filePath) {
         await withRetry("downloadPackFile", async () => {
             await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+            let totalSize = 0;
             await new Promise((resolve, reject) => {
                 const writeStream = fs.createWriteStream(filePath);
-                let totalSize = 0;
-                const cleanup = (err) => {
+                writeStream.on('error', (err) => {
                     writeStream.destroy();
-                    if (err) {
-                        try {
-                            fs.unlinkSync(filePath);
-                        }
-                        catch { }
-                        reject(err);
+                    try {
+                        fs.unlinkSync(filePath);
                     }
-                };
+                    catch { }
+                    reject(err);
+                });
                 this.flatDirectory.download(fileName, {
                     onProgress: (progress, count, chunk) => {
                         totalSize += chunk.length;
                         writeStream.write(chunk);
                     },
-                    onFail: e => {
-                        cleanup(e);
-                    },
-                    onFinish: () => {
-                        log(`[INFO] Download finished for ${fileName}. Total size: ${totalSize} bytes.`);
-                        writeStream.end(() => resolve());
-                    }
+                    onFail: (err) => reject(err),
+                    onFinish: () => writeStream.end()
                 });
-                writeStream.on('error', cleanup);
+                finished(writeStream)
+                    .then(() => {
+                    log(`[INFO] Download finished for ${fileName}. Total size: ${totalSize} bytes.`);
+                    resolve();
+                })
+                    .catch(reject);
             });
         });
         return filePath;
