@@ -174,27 +174,27 @@ export class ContractDriver {
     let currentSuccessIndex = -1;
 
     const uploadCallback = {
-      onTransactionSent: (txHash: string, chunkIds: number[] | number) => {
-        log(`[INFO] pack file ${dst}: Chunks ${chunkIds} Tx Hash: ${txHash}`);
+      onTransactionSent: (txHash: string) => {
+        log(`[INFO] Upload tx sent: ${txHash}`);
       },
       onProgress: (progress: number, total: number, isChange: boolean) => {
-        // Simplified logging logic for progress changes
-        const completedIndices: number[] = [];
-        for (let i = currentSuccessIndex + 1; i <= progress; i++) {
-          completedIndices.push(i);
-        }
-        if (completedIndices.length > 0) {
-          const action = isChange ? 'uploaded' : 'skipped (no change)';
-          log(`[PROGRESS] pack file ${dst}: Chunks ${completedIndices.join(',')} ${action}`);
-        }
+        const start = currentSuccessIndex + 1;
+        const end = progress;
+        if (start > end) return;
+
         currentSuccessIndex = progress;
+        if (isChange) {
+          log(`[PROGRESS] pack file ${dst}: Uploaded chunks ${start}-${end}`);
+        } else {
+          log(`[PROGRESS] pack file ${dst}: Chunks ${start}-${end} skipped (no change)`);
+        }
       },
       onFail: (err: Error) => {
         log(`[ERROR] pack file ${dst}: ${err.message}`);
         status = false;
       },
       onFinish: (totalChunks: number, totalSize: number, totalCost: bigint) => {
-        log(`[INFO] pack file ${dst}: Finished ${totalChunks} chunks, ${totalSize} bytes. Total Cost: ${totalCost}`);
+        log(`[INFO] Upload finished: ${totalChunks} chunks, ${totalSize} bytes`);
       }
     };
 
