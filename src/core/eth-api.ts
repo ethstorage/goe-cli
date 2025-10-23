@@ -1,5 +1,6 @@
 import * as path from 'path';
-import { Api } from '../types/api-types.js';
+
+import { Api } from '../types/index.js';
 import { parseEthsURI } from "../utils/index.js";
 import Eths from "./eths.js";
 

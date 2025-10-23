@@ -39,9 +39,6 @@ export async function createPackFileBuffer(newOid, parentOid) {
     const revs = parentOid ? `${newOid}\n^${parentOid}\n` : `${newOid}\n`;
     return spawnWithOutput('git', ['pack-objects', '--stdout', '--revs', '--thin', '--delta-base-offset'], { stdio: ['pipe', 'pipe', 'inherit'] }, Buffer.from(revs, 'utf8'));
 }
-export async function runGitIndexPackFromBuf(buf, gitDir) {
-    return spawnNoOutput('git', ['index-pack', '--stdin', '--fix-thin', '--keep', '-v'], { cwd: gitDir, stdio: ['pipe', 'ignore', 'inherit'] }, buf);
-}
 export async function runGitIndexPackFromFile(packFilePath, gitDir) {
     return spawnNoOutput('git', ['index-pack', '--keep', '-v', packFilePath], { cwd: gitDir, stdio: ['ignore', 'ignore', 'inherit'] });
 }

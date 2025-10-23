@@ -1,4 +1,4 @@
-import {spawn, SpawnOptions} from 'node:child_process';
+import { spawn, SpawnOptions } from 'node:child_process';
 
 function spawnWithOutput(
     command: string,
@@ -56,15 +56,6 @@ export async function createPackFileBuffer(newOid: string, parentOid?: string): 
       ['pack-objects', '--stdout', '--revs', '--thin', '--delta-base-offset'],
       { stdio: ['pipe', 'pipe', 'inherit'] },
       Buffer.from(revs, 'utf8')
-  );
-}
-
-export async function runGitIndexPackFromBuf(buf: Buffer, gitDir: string): Promise<void> {
-  return spawnNoOutput(
-      'git',
-      ['index-pack', '--stdin', '--fix-thin', '--keep', '-v'],
-      { cwd: gitDir, stdio: ['pipe', 'ignore', 'inherit'] },
-      buf
   );
 }
 

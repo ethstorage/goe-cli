@@ -2,7 +2,7 @@ import { stdout } from 'node:process';
 import { asyncMap } from 'rxjs-async-map';
 import { rxToStream, streamToStringRx } from 'rxjs-stream';
 import { filter, map, mergeMap, scan } from 'rxjs/operators';
-import { GitCommands } from '../types/api-types.js';
+import { GitCommands } from '../types/index.js';
 const ONE_LINE_COMMANDS = [
     GitCommands.capabilities,
     GitCommands.option,

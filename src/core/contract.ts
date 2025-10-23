@@ -3,8 +3,9 @@ import * as path from 'path';
 import { finished } from 'node:stream/promises';
 import { ethers } from 'ethers';
 import { UploadType, FlatDirectory } from "ethstorage-sdk";
-import { log } from "../utils/log.js"
-import { Update, GitContract } from "./types.js";
+
+import { log } from "../utils/index.js"
+import { Update, GitContract } from "../types/index.js";
 
 const ZERO_ADDRESS_HEX = '0x0000000000000000000000000000000000000000';
 const MAX_RPC_RETRIES = 3;

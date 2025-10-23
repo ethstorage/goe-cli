@@ -1,19 +1,13 @@
 import URLParse from "url-parse"
 import { ethers } from "ethers";
-import Networks from "../config/network.js"
 
-export type EthsProtocol = {
-    remoteUrl: string
-    hubAddress: string
-    chainId: number
-    netConfig: Record<string, any>
+import { Networks } from "../config/index.js"
+import { EthfsProtocol } from "../types/index.js";
 
-    ns?: Record<string, any>
-    nsName?: string
-    nsDomain?: string
-}
+export * from './log.js';
+export * from './git-helper.js';
 
-export async function parseEthsURI(uri: string): Promise<EthsProtocol> {
+export async function parseEthsURI(uri: string): Promise<EthfsProtocol> {
     const url = new URLParse(uri)
     let hostname = url.hostname
     if (!hostname || !ethers.isAddress(hostname)) {

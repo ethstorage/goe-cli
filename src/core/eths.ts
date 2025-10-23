@@ -4,20 +4,17 @@ import { FlatDirectory } from "ethstorage-sdk";
 import { join } from "path";
 import { mkdirSync, existsSync, writeFileSync } from "fs";
 
-import { EthsProtocol, randomRPC } from "../utils/index.js";
-import { ContractDriver } from "../storage/contract.js";
-import { ETHSAbi } from "../config/abis.js";
-import { Ref, PushRecord } from "../storage/types.js";
+import { Ref, PushRecord, FetchRef, PushRef, EthfsProtocol } from "../types/index.js";
+import { ETHSAbi } from "../config/index.js";
 import {
     getOidFromRef,
     getLocalCommitOids,
     createPackFileBuffer,
     runGitIndexPackFromFile,
-} from "../utils/git-helper.js";
-
-import { log } from "../utils/log.js"
-import { FetchRef, PushRef } from "../types/api-types.js";
-
+    randomRPC,
+    log
+} from "../utils/index.js";
+import { ContractDriver } from "./contract.js";
 
 
 // TODO
@@ -69,7 +66,7 @@ class Eths {
 
     contractDriver: ContractDriver
 
-    constructor(gitdir: string, protocol: EthsProtocol, contractDriver: ContractDriver) {
+    constructor(gitdir: string, protocol: EthfsProtocol, contractDriver: ContractDriver) {
         this.gitdir = gitdir
         this.remoteUrl = protocol.remoteUrl
         this.hubAddress = protocol.hubAddress
@@ -80,7 +77,7 @@ class Eths {
         this.refs = new Map()
     }
 
-    static async create(gitdir: string, protocol: EthsProtocol): Promise<Eths> {
+    static async create(gitdir: string, protocol: EthfsProtocol): Promise<Eths> {
         const privateKey = getPrivateKey();
 
         const netConfig = protocol.netConfig;

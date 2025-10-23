@@ -1,6 +1,8 @@
 import URLParse from "url-parse";
 import { ethers } from "ethers";
-import Networks from "../config/network.js";
+import { Networks } from "../config/index.js";
+export * from './log.js';
+export * from './git-helper.js';
 export async function parseEthsURI(uri) {
     const url = new URLParse(uri);
     let hostname = url.hostname;

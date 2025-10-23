@@ -1,4 +1,3 @@
-
 export const ETHSAbi = [
     "function getDefaultBranch() external view returns (bytes memory name, bytes20 hash)",
     "function listBranches(uint256 start, uint256 limit) external view returns (tuple(bytes name, bytes20 hash)[] memory list)",

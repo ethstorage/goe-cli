@@ -3,11 +3,9 @@ import { ethers } from 'ethers';
 import { FlatDirectory } from "ethstorage-sdk";
 import { join } from "path";
 import { mkdirSync, existsSync, writeFileSync } from "fs";
-import { randomRPC } from "../utils/index.js";
-import { ContractDriver } from "../storage/contract.js";
-import { ETHSAbi } from "../config/abis.js";
-import { getOidFromRef, getLocalCommitOids, createPackFileBuffer, runGitIndexPackFromFile, } from "../utils/git-helper.js";
-import { log } from "../utils/log.js";
+import { ETHSAbi } from "../config/index.js";
+import { getOidFromRef, getLocalCommitOids, createPackFileBuffer, runGitIndexPackFromFile, randomRPC, log } from "../utils/index.js";
+import { ContractDriver } from "./contract.js";
 // TODO
 import path from "path";
 import dotenv from "dotenv";

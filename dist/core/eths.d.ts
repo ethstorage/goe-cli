@@ -1,6 +1,5 @@
-import { EthsProtocol } from "../utils/index.js";
-import { ContractDriver } from "../storage/contract.js";
-import { FetchRef, PushRef } from "../types/api-types.js";
+import { FetchRef, PushRef, EthfsProtocol } from "../types/index.js";
+import { ContractDriver } from "./contract.js";
 export declare function getPrivateKey(): string;
 declare class Eths {
     gitdir: string;
@@ -11,8 +10,8 @@ declare class Eths {
     defaultBranch: string;
     refs: Map<string, string>;
     contractDriver: ContractDriver;
-    constructor(gitdir: string, protocol: EthsProtocol, contractDriver: ContractDriver);
-    static create(gitdir: string, protocol: EthsProtocol): Promise<Eths>;
+    constructor(gitdir: string, protocol: EthfsProtocol, contractDriver: ContractDriver);
+    static create(gitdir: string, protocol: EthfsProtocol): Promise<Eths>;
     doList(forPush: boolean): Promise<string>;
     doFetch(refs: FetchRef[]): Promise<string>;
     doPush(refs: PushRef[]): Promise<string>;

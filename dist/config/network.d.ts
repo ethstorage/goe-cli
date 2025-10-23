@@ -1,2 +1,1 @@
-declare const Networks: Record<number, any>;
-export default Networks;
+export declare const Networks: Record<number, any>;

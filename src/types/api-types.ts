@@ -1,4 +1,3 @@
-
 export type PushRef = { src: string; dst: string; force: boolean };
 
 export type FetchRef = { ref: string; oid: string };
@@ -9,7 +8,6 @@ export type Api = {
   handleFetch: (refs: FetchRef[]) => Promise<string>;
   close: () => Promise<void>;
 };
-
 
 export enum GitCommands {
   capabilities = 'capabilities',

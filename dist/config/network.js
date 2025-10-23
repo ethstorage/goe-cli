@@ -1,5 +1,4 @@
-// from https://chainid.network/chains.json
-const Networks = {
+export const Networks = {
     3335: {
         name: "QuarkChain Beta L2",
         nativeCurrency: {
@@ -47,4 +46,3 @@ const Networks = {
         contracts: { factory: "0xFDa9bACe3Ed87e40f0017013111186c80ba2cD9C" },
     },
 };
-export default Networks;

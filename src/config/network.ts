@@ -1,6 +1,4 @@
-// from https://chainid.network/chains.json
-
-const Networks: Record<number, any> = {
+export const Networks: Record<number, any> = {
     3335: {
         name: "QuarkChain Beta L2",
         nativeCurrency: {
@@ -22,7 +20,7 @@ const Networks: Record<number, any> = {
             rbfTimes: 5,
             boardcastTimes: 15,
         },
-        contracts: { factory: "0x96f7849C6D0EB09024e482Cc9c249096e3368a16" },
+        contracts: {factory: "0x96f7849C6D0EB09024e482Cc9c249096e3368a16"},
     },
     11155111: {
         name: "Sepolia",
@@ -45,8 +43,6 @@ const Networks: Record<number, any> = {
             rbfTimes: 5,
             boardcastTimes: 15,
         },
-        contracts: { factory: "0xFDa9bACe3Ed87e40f0017013111186c80ba2cD9C" },
+        contracts: {factory: "0xFDa9bACe3Ed87e40f0017013111186c80ba2cD9C"},
     },
 }
-
-export default Networks
