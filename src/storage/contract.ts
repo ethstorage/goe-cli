@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { ethers } from 'ethers';
 import { UploadType, FlatDirectory } from "ethstorage-sdk";
 import { log } from "../utils/log.js"
@@ -114,6 +116,14 @@ export class ContractDriver {
     }));
   }
 
+  async getPushRecordsCount(refName: string) {
+    const refNameBytes = ethers.toUtf8Bytes(refName);
+    const count = await withRetry("getPushRecordCount",
+        () => this.contract.getPushRecordCount(refNameBytes)
+    );
+    return Number(count);
+  }
+
   // --- Write Operations (with Retry) ---
 
   async writeRef(update: Update): Promise<boolean> {
@@ -204,27 +214,40 @@ export class ContractDriver {
     return status;
   }
 
-  async downloadPackFile(fileName: string): Promise<Buffer> {
-    const chunks: Buffer[] = [];
-    return new Promise<Buffer>((resolve, reject) => {
-      let totalSize = 0;
-      this.flatDirectory.download(fileName, {
-        onProgress: (progress: number, count: number, chunk: Uint8Array) => {
-          chunks.push(Buffer.from(chunk));
-          totalSize += chunk.length;
-          log(`[PROGRESS] Downloading packfile ${fileName.slice(0, 8)}... ${Math.round(progress * 100)}% (${totalSize} bytes)`);
-        },
-        onFail: (e: Error) => {
-          log(`[ERROR] Packfile download failed for ${fileName}: ${e.message}`);
-          reject(new Error(`Download failed for packfile ${fileName}`));
-        },
-        onFinish: () => {
-          const fullBuffer = Buffer.concat(chunks);
-          log(`[INFO] Download finished for ${fileName}. Total size: ${fullBuffer.length} bytes.`);
-          resolve(fullBuffer);
-        }
+  async downloadPackFile(fileName: string, filePath: string): Promise<string> {
+    await withRetry("downloadPackFile", async () => {
+      await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+
+      await new Promise<void>((resolve, reject) => {
+        const writeStream = fs.createWriteStream(filePath);
+        let totalSize = 0;
+        const cleanup = (err?: Error) => {
+          writeStream.destroy();
+          if (err) {
+            try { fs.unlinkSync(filePath); } catch {}
+            reject(err);
+          }
+        };
+
+        this.flatDirectory.download(fileName, {
+          onProgress: (progress, count, chunk) => {
+            totalSize += chunk.length;
+            writeStream.write(chunk);
+          },
+          onFail: e => {
+            cleanup(e);
+          },
+          onFinish: () => {
+            log(`[INFO] Download finished for ${fileName}. Total size: ${totalSize} bytes.`);
+            writeStream.end(() => resolve());
+          }
+        });
+
+        writeStream.on('error', cleanup);
       });
     });
+
+    return filePath;
   }
 
   async close() {

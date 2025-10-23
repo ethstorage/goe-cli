@@ -1,3 +1,4 @@
+import pLimit from 'p-limit';
 import { ethers } from 'ethers';
 import { FlatDirectory } from "ethstorage-sdk";
 import { join } from "path";
@@ -11,7 +12,7 @@ import {
     getOidFromRef,
     getLocalCommitOids,
     createPackFileBuffer,
-    runGitIndexPackFromBuf,
+    runGitIndexPackFromFile,
 } from "../utils/git-helper.js";
 
 import { log } from "../utils/log.js"
@@ -53,6 +54,8 @@ export function getPrivateKey(): string {
 }
 
 const ZERO_OID = "0000000000000000000000000000000000000000";
+const RPC_CONCURRENCY_LIMIT = 8;
+const DOWNLOAD_CONCURRENCY_LIMIT = 15;
 
 class Eths {
     gitdir: string
@@ -254,13 +257,28 @@ class Eths {
 
     private async getAllPushRecords(refName: string): Promise<PushRecord[]> {
         const allUpdates: PushRecord[] = [];
+
+        const totalRecords = await this.contractDriver.getPushRecordsCount(refName);
+        if (totalRecords === 0) {
+            return [];
+        }
+
         const limit = 150;
-        let start = 0;
-        while (true) {
-            const updates = await this.contractDriver.getPushRecords(refName, start, limit);
-            if (updates.length === 0) break;
+        const numPages = Math.ceil(totalRecords / limit);
+        const requests: { start: number, limit: number }[] = [];
+        for (let i = 0; i < numPages; i++) {
+            const start = i * limit;
+            requests.push({ start, limit });
+        }
+
+        const concurrencyLimiter = pLimit(RPC_CONCURRENCY_LIMIT);
+        const fetchTasks = requests.map(req => concurrencyLimiter(async () => {
+            return this.contractDriver.getPushRecords(refName, req.start, req.limit);
+        }));
+        const allPagesUpdates = await Promise.all(fetchTasks);
+
+        for (const updates of allPagesUpdates) {
             allUpdates.push(...updates);
-            start += updates.length;
         }
         return allUpdates;
     }
@@ -275,19 +293,33 @@ class Eths {
         const packDir = join(this.gitdir, "objects", "pack");
         if (!existsSync(packDir)) mkdirSync(packDir, { recursive: true });
 
+        // download
         log(`[INFO] Downloading ${updates.length} packfile(s) for branch...`);
-        for (const update of updates) {
+        const limit = pLimit(DOWNLOAD_CONCURRENCY_LIMIT);
+        const tasks = updates.map(update => limit(async () => {
             const packKey = update.packfileKey;
-            const packData = await this.contractDriver.downloadPackFile(packKey);
-            if (!packData) {
-                throw new Error(`Failed to download packfile ${packKey}`);
-            }
-
-            await runGitIndexPackFromBuf(packData, this.gitdir);
+            const packFileName = `pack-${packKey}.pack`;
+            const packFilePath = join(packDir, packFileName);
+            await this.contractDriver.downloadPackFile(packKey, packFilePath);
+            return packFilePath;
+        }));
+        const results = await Promise.allSettled(tasks);
+        const success = results.filter(r => r.status === 'fulfilled') as PromiseFulfilledResult<string>[];
+        const failed = results
+            .filter(r => r.status === 'rejected') as PromiseRejectedResult[];
+        if (failed.length > 0) {
+            process.stdout.write("\n");
+            log(`[FATAL] ${failed.length} packfile(s) failed to download.`);
+            for (const f of failed) log(`[ERROR] ${f.reason}`);
+            throw new Error('Packfile download failed');
         }
 
-        const keepPath = join(packDir, `eths-helper-${Date.now()}.keep`);
-        writeFileSync(keepPath, "keep\n");
+        // provided to git
+        for (const { value: packFilePath } of success) {
+            await runGitIndexPackFromFile(packFilePath, this.gitdir);
+            const keepPath = join(packDir, `${path.basename(packFilePath, '.pack')}.keep`);
+            writeFileSync(keepPath, "keep\n");
+        }
 
         // finish
         process.stdout.write("\n");

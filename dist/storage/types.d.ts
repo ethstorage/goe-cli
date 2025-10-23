@@ -29,6 +29,7 @@ export interface GitContract extends BaseContract {
     canForcePush(account: string, refName: BytesLike): Promise<boolean>;
     getBranchHead(refName: BytesLike): Promise<[string, boolean]>;
     getPushRecords(refName: BytesLike, start: BigNumberish, limit: BigNumberish): Promise<PushRecord[]>;
+    getPushRecordCount(refName: BytesLike): Promise<BigNumberish>;
     push(refName: BytesLike, parentOid: BytesLike, newOid: BytesLike, packfileKey: BytesLike, packfileSize: BigNumberish): Promise<ContractTransactionResponse>;
     forcePush(refName: BytesLike, newOid: BytesLike, packfileKey: BytesLike, packfileSize: BigNumberish, parentOid: BytesLike, parentIndex: BigNumberish): Promise<ContractTransactionResponse>;
 }

@@ -68,6 +68,14 @@ export async function runGitIndexPackFromBuf(buf: Buffer, gitDir: string): Promi
   );
 }
 
+export async function runGitIndexPackFromFile(packFilePath: string, gitDir: string): Promise<void> {
+  return spawnNoOutput(
+      'git',
+      ['index-pack', '--keep', '-v', packFilePath],
+      { cwd: gitDir, stdio: ['ignore', 'ignore', 'inherit'] }
+  );
+}
+
 export async function getLocalCommitOids(refName: string): Promise<Set<string>> {
   try {
     await spawnNoOutput('git', ['show-ref', '--quiet', '--verify', refName]);

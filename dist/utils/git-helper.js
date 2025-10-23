@@ -42,6 +42,9 @@ export async function createPackFileBuffer(newOid, parentOid) {
 export async function runGitIndexPackFromBuf(buf, gitDir) {
     return spawnNoOutput('git', ['index-pack', '--stdin', '--fix-thin', '--keep', '-v'], { cwd: gitDir, stdio: ['pipe', 'ignore', 'inherit'] }, buf);
 }
+export async function runGitIndexPackFromFile(packFilePath, gitDir) {
+    return spawnNoOutput('git', ['index-pack', '--keep', '-v', packFilePath], { cwd: gitDir, stdio: ['ignore', 'ignore', 'inherit'] });
+}
 export async function getLocalCommitOids(refName) {
     try {
         await spawnNoOutput('git', ['show-ref', '--quiet', '--verify', refName]);

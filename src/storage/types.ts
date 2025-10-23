@@ -35,6 +35,7 @@ export interface GitContract extends BaseContract {
   canForcePush(account: string, refName: BytesLike): Promise<boolean>;
   getBranchHead(refName: BytesLike): Promise<[string, boolean]>; // bytes20 headOid, bool exists
   getPushRecords(refName: BytesLike, start: BigNumberish, limit: BigNumberish): Promise<PushRecord[]>;
+  getPushRecordCount(refName: BytesLike): Promise<BigNumberish>;
 
   // Write Methods (State-changing) - 返回 Promise<ContractTransactionResponse>
   push(

@@ -27,9 +27,10 @@ export declare class ContractDriver {
         timestamp: number;
         pusher: any;
     }[]>;
+    getPushRecordsCount(refName: string): Promise<number>;
     writeRef(update: Update): Promise<boolean>;
     writeForceRef(update: Update): Promise<boolean>;
     uploadPack(dst: string, fileKey: string, packFile: Buffer): Promise<boolean>;
-    downloadPackFile(fileName: string): Promise<Buffer>;
+    downloadPackFile(fileName: string, filePath: string): Promise<string>;
     close(): Promise<void>;
 }
