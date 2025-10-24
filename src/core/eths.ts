@@ -16,7 +16,7 @@ import {
     getOidFromRef,
     log,
     randomRPC,
-    runGitIndexPackFromFile
+    runGitPackFromFile
 } from "../utils/index.js";
 import { ContractDriver } from "./contract.js";
 
@@ -275,7 +275,7 @@ class Eths {
 
         // provided to git
         for (const { value: packFilePath } of success) {
-            await runGitIndexPackFromFile(packFilePath, this.gitdir);
+            await runGitPackFromFile(packFilePath, this.gitdir);
         }
 
         // finish

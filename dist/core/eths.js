@@ -4,7 +4,7 @@ import { FlatDirectory } from "ethstorage-sdk";
 import path, { join } from "path";
 import { existsSync, mkdirSync } from "fs";
 import { ETHSAbi } from "../config/index.js";
-import { createPackFileBuffer, findCommonAncestor, findMatchingLocalBranch, getOidFromRef, log, randomRPC, runGitIndexPackFromFile } from "../utils/index.js";
+import { createPackFileBuffer, findCommonAncestor, findMatchingLocalBranch, getOidFromRef, log, randomRPC, runGitPackFromFile } from "../utils/index.js";
 import { ContractDriver } from "./contract.js";
 // TODO
 import dotenv from "dotenv";
@@ -229,7 +229,7 @@ class Eths {
         }
         // provided to git
         for (const { value: packFilePath } of success) {
-            await runGitIndexPackFromFile(packFilePath, this.gitdir);
+            await runGitPackFromFile(packFilePath, this.gitdir);
         }
         // finish
         process.stdout.write("\n");

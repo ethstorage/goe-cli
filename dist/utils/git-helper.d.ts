@@ -1,5 +1,5 @@
 export declare function createPackFileBuffer(newOid: string, parentOid?: string): Promise<Buffer>;
-export declare function runGitIndexPackFromFile(packFilePath: string, gitDir: string): Promise<void>;
+export declare function runGitPackFromFile(packFilePath: string, gitDir: string): Promise<void>;
 export declare function getLocalCommitOids(refName: string): Promise<Set<string>>;
 export declare function getOidFromRef(refName: string): Promise<string>;
 export declare function findMatchingLocalBranch(remoteRef: string): Promise<string | null>;

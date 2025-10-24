@@ -1,4 +1,5 @@
 import { spawn, SpawnOptions } from 'node:child_process';
+import { createReadStream } from 'node:fs';
 
 function spawnWithOutput(
     command: string,
@@ -59,12 +60,31 @@ export async function createPackFileBuffer(newOid: string, parentOid?: string): 
   );
 }
 
-export async function runGitIndexPackFromFile(packFilePath: string, gitDir: string): Promise<void> {
+async function runGitIndexPackFromFile(packFilePath: string, gitDir: string): Promise<void> {
   return spawnNoOutput(
       'git',
       ['index-pack', '--keep', '-v', packFilePath],
       { cwd: gitDir, stdio: ['ignore', 'ignore', 'inherit'] }
   );
+}
+
+export async function runGitPackFromFile(packFilePath: string, gitDir: string): Promise<void> {
+  try {
+    await runGitIndexPackFromFile(packFilePath, gitDir);
+  } catch (err) {
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn('git', ['index-pack', '--fix-thin', '--stdin', '-v'], { cwd: gitDir, stdio: ['pipe', 'inherit', 'pipe'] });
+      const stderr: Buffer[] = [];
+      if (child.stderr) child.stderr.on('data', d => stderr.push(d));
+      child.on('error', reject);
+      child.on('close', code => {
+        if (code === 0) resolve();
+        else reject(new Error(`git index-pack --fix-thin failed: ${Buffer.concat(stderr).toString()}`));
+      });
+
+      createReadStream(packFilePath).pipe(child.stdin!);
+    });
+  }
 }
 
 export async function getLocalCommitOids(refName: string): Promise<Set<string>> {
