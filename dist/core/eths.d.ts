@@ -1,4 +1,4 @@
-import { FetchRef, PushRef, EthfsProtocol } from "../types/index.js";
+import { EthfsProtocol, FetchRef, PushRef } from "../types/index.js";
 import { ContractDriver } from "./contract.js";
 export declare function getPrivateKey(): string;
 declare class Eths {
@@ -17,7 +17,6 @@ declare class Eths {
     doPush(refs: PushRef[]): Promise<string>;
     private getRefs;
     private fetch;
-    private getAllPushRecords;
     private sendEmptyPackFileResponse;
     private sendPackfiles;
     private handlePush;

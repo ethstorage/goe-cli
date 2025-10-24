@@ -1,24 +1,26 @@
 import pLimit from 'p-limit';
 import { ethers } from 'ethers';
 import { FlatDirectory } from "ethstorage-sdk";
-import { join } from "path";
-import { mkdirSync, existsSync, writeFileSync } from "fs";
+import path, {join} from "path";
+import { existsSync, mkdirSync, writeFileSync } from "fs";
 
-import { Ref, PushRecord, FetchRef, PushRef, EthfsProtocol } from "../types/index.js";
+import {
+    EthfsProtocol, FetchRef,
+    PushRecord, PushRef, Ref
+} from "../types/index.js";
 import { ETHSAbi } from "../config/index.js";
 import {
-    getOidFromRef,
-    getLocalCommitOids,
     createPackFileBuffer,
-    runGitIndexPackFromFile,
+    findCommonAncestor,
+    findMatchingLocalBranch,
+    getOidFromRef,
+    log,
     randomRPC,
-    log
+    runGitIndexPackFromFile
 } from "../utils/index.js";
 import { ContractDriver } from "./contract.js";
 
-
 // TODO
-import path from "path";
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 
@@ -222,62 +224,22 @@ class Eths {
 
     // fetch
     private async fetch(wantRef: string) {
-        const updates = await this.getAllPushRecords(wantRef);
-        if (updates.length === 0) {
-            log(`Ref ${wantRef} has no history on remote.`);
-            this.sendEmptyPackFileResponse();
-            return;
-        }
+        const srcRef = await findMatchingLocalBranch(wantRef);
+        const result = await findCommonAncestor(
+            this.contractDriver,
+            srcRef, // 'refs/heads/main'
+            wantRef, // 'refs/heads/master'
+            RPC_CONCURRENCY_LIMIT
+        );
 
-        //  pull
-        const localOids = await getLocalCommitOids(wantRef);
-        const missingPacks: PushRecord[] = [];
-        let foundLocalHead = false;
-        for (let i = updates.length - 1; i >= 0; i--) {
-            const update = updates[i];
-            if (localOids.has(update.newOid)) {
-                foundLocalHead = true;
-                break;
-            }
-
-            missingPacks.push(update);
-        }
-
-        if (missingPacks.length === 0 && foundLocalHead) {
+        const { missingPacks } = result;
+        if (missingPacks.length === 0) {
             log(`No new objects to fetch for ${wantRef}.`);
             this.sendEmptyPackFileResponse();
             return;
         }
 
-        await this.sendPackfiles(missingPacks.reverse());
-    }
-
-    private async getAllPushRecords(refName: string): Promise<PushRecord[]> {
-        const allUpdates: PushRecord[] = [];
-
-        const totalRecords = await this.contractDriver.getPushRecordsCount(refName);
-        if (totalRecords === 0) {
-            return [];
-        }
-
-        const limit = 150;
-        const numPages = Math.ceil(totalRecords / limit);
-        const requests: { start: number, limit: number }[] = [];
-        for (let i = 0; i < numPages; i++) {
-            const start = i * limit;
-            requests.push({ start, limit });
-        }
-
-        const concurrencyLimiter = pLimit(RPC_CONCURRENCY_LIMIT);
-        const fetchTasks = requests.map(req => concurrencyLimiter(async () => {
-            return this.contractDriver.getPushRecords(refName, req.start, req.limit);
-        }));
-        const allPagesUpdates = await Promise.all(fetchTasks);
-
-        for (const updates of allPagesUpdates) {
-            allUpdates.push(...updates);
-        }
-        return allUpdates;
+        await this.sendPackfiles(missingPacks);
     }
 
     private sendEmptyPackFileResponse() {
@@ -368,30 +330,24 @@ class Eths {
                 return `error ${dst} no force push permission`;
             }
 
+            //  1. find parent oid
             const newOid = await getOidFromRef(src);
+            const result = await findCommonAncestor(
+                this.contractDriver,
+                src,
+                dst,
+                RPC_CONCURRENCY_LIMIT
+            );
 
-            // 1. get all history
-            const chainRecords = await this.getAllPushRecords(dst);
-            const localOids = await getLocalCommitOids(src);
+            const commonRecord = result.commonRecord;
+            const commonIndex = result.commonIndex;
 
-            // 2. find modify index
-            let commonOid: string | null = null;
-            let commonIndex = -1;
-            for (let i = chainRecords.length - 1; i >= 0; i--) {
-                const record = chainRecords[i];
-                if (localOids.has(record.newOid)) {
-                    commonOid = record.newOid;
-                    commonIndex = i;
-                    break;
-                }
-            }
-
-            // 3. create pack file
+            // 2. create packfile
             let packFile: Buffer;
             let parentOid: string;
             let parentIndex: number;
-
-            if (commonOid) {
+            if (commonRecord) {
+                const commonOid = commonRecord.newOid;
                 packFile = await createPackFileBuffer(newOid, commonOid);
                 parentOid = commonOid;
                 parentIndex = commonIndex;
@@ -403,8 +359,7 @@ class Eths {
                 log(`[INFO] Force push: Full override (No common ancestor).`);
             }
 
-
-            // 4. upload pack file
+            // 3. upload Pack file
             log('');
             log(`[PROGRESS] Uploading packfile (Size: ${packFile.length} bytes) to EthStorage...`);
             let status = await this.contractDriver.uploadPack(dst, newOid, packFile);
@@ -412,8 +367,7 @@ class Eths {
                 return `error ${dst} upload pack file fail`;
             }
 
-
-            // 5. update refs
+            // 4. update refs
             status = await this.contractDriver.writeForceRef({
                 refName: dst,
                 parentOid: parentOid,
