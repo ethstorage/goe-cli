@@ -90,11 +90,24 @@ export async function getOidFromRef(refName: string): Promise<string> {
 }
 
 export async function findMatchingLocalBranch(remoteRef: string): Promise<string | null> {
+  try {
+    await runCmdCapture(['git', 'rev-parse', '--is-inside-work-tree']);
+  } catch (err) {
+    return null;
+  }
+  try {
+    const branchConfigs = await runCmdCapture(['git', 'config', '--get-regexp', '^branch\\.']);
+    if (!branchConfigs.trim()) {
+      return null;
+    }
+  } catch (err) {
+    return null;
+  }
+
+  // query
   let remote = 'origin';
   let branchName: string;
 
-  // refs/remotes/origin/master → remote=origin, branchName=master
-  // refs/heads/master → remote=origin, branchName=master
   const remotesMatch = remoteRef.match(/^refs\/remotes\/([^/]+)\/(.+)$/);
   if (remotesMatch) {
     [, remote, branchName] = remotesMatch;
@@ -106,17 +119,14 @@ export async function findMatchingLocalBranch(remoteRef: string): Promise<string
       remote = parts[0];
       branchName = parts.slice(1).join('/');
     } else {
-      console.error(`Invalid remote ref format: ${remoteRef}`);
       return null;
     }
   }
   const mergeRef = `refs/heads/${branchName}`;
-
   let configOutput: string;
   try {
     configOutput = await runCmdCapture(['git', 'config', '--list']);
   } catch (err) {
-    console.error('Failed to read git config:', err);
     return null;
   }
 
@@ -131,6 +141,7 @@ export async function findMatchingLocalBranch(remoteRef: string): Promise<string
       (branchConfig[branch] as any)[prop] = val.trim();
     }
   }
+
   let currentBranch: string | null = null;
   try {
     const output = (await runCmdCapture(['git', 'rev-parse', '--abbrev-ref', 'HEAD'])).trim();
@@ -144,16 +155,15 @@ export async function findMatchingLocalBranch(remoteRef: string): Promise<string
   if (currentBranch) {
     const currentConf = branchConfig[currentBranch];
     if (currentConf?.remote === remote && currentConf?.merge === mergeRef) {
-      return currentBranch;
+      return `refs/heads/${currentBranch}`;
     }
   }
 
   for (const [branch, { remote: r, merge: m }] of Object.entries(branchConfig)) {
     if (r === remote && m === mergeRef) {
-      return branch;
+      return `refs/heads/${branch}`;
     }
   }
 
   return null;
 }
-

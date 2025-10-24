@@ -64,10 +64,24 @@ export async function getOidFromRef(refName) {
     return output.trim();
 }
 export async function findMatchingLocalBranch(remoteRef) {
+    try {
+        await runCmdCapture(['git', 'rev-parse', '--is-inside-work-tree']);
+    }
+    catch (err) {
+        return null;
+    }
+    try {
+        const branchConfigs = await runCmdCapture(['git', 'config', '--get-regexp', '^branch\\.']);
+        if (!branchConfigs.trim()) {
+            return null;
+        }
+    }
+    catch (err) {
+        return null;
+    }
+    // query
     let remote = 'origin';
     let branchName;
-    // refs/remotes/origin/master → remote=origin, branchName=master
-    // refs/heads/master → remote=origin, branchName=master
     const remotesMatch = remoteRef.match(/^refs\/remotes\/([^/]+)\/(.+)$/);
     if (remotesMatch) {
         [, remote, branchName] = remotesMatch;
@@ -82,7 +96,6 @@ export async function findMatchingLocalBranch(remoteRef) {
             branchName = parts.slice(1).join('/');
         }
         else {
-            console.error(`Invalid remote ref format: ${remoteRef}`);
             return null;
         }
     }
@@ -92,7 +105,6 @@ export async function findMatchingLocalBranch(remoteRef) {
         configOutput = await runCmdCapture(['git', 'config', '--list']);
     }
     catch (err) {
-        console.error('Failed to read git config:', err);
         return null;
     }
     const branchConfig = {};
@@ -120,12 +132,12 @@ export async function findMatchingLocalBranch(remoteRef) {
     if (currentBranch) {
         const currentConf = branchConfig[currentBranch];
         if (currentConf?.remote === remote && currentConf?.merge === mergeRef) {
-            return currentBranch;
+            return `refs/heads/${currentBranch}`;
         }
     }
     for (const [branch, { remote: r, merge: m }] of Object.entries(branchConfig)) {
         if (r === remote && m === mergeRef) {
-            return branch;
+            return `refs/heads/${branch}`;
         }
     }
     return null;

@@ -2,7 +2,7 @@ import pLimit from 'p-limit';
 import { ethers } from 'ethers';
 import { FlatDirectory } from "ethstorage-sdk";
 import path, {join} from "path";
-import { existsSync, mkdirSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync } from "fs";
 
 import {
     EthfsProtocol, FetchRef,
@@ -276,8 +276,6 @@ class Eths {
         // provided to git
         for (const { value: packFilePath } of success) {
             await runGitIndexPackFromFile(packFilePath, this.gitdir);
-            const keepPath = join(packDir, `${path.basename(packFilePath, '.pack')}.keep`);
-            writeFileSync(keepPath, "keep\n");
         }
 
         // finish
