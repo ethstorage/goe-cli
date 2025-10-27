@@ -3,18 +3,18 @@
   "version": "0.1.0",
   "type": "module",
   "bin": {
-    "git-remote-eths": "./dist/index.js"
+    "git-remote-eths": "./dist/helper/index.js",
+    "eths-cli": "./dist/cli/index.js"
   },
   "scripts": {
+    "prepublishOnly": "npm run build",
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist"
   },
   "engines": {
     "node": ">=18"
   },
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "keywords": [
     "git",
     "remote",
@@ -38,7 +38,6 @@
   },
   "devDependencies": {
     "@types/node": "^24.9.1",
-    "tsup": "^8.5.0",
     "typescript": "^5.9.3"
   }
 }

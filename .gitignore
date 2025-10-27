@@ -23,3 +23,4 @@ TestResults.xml
 /.env
 /.idea/
 /node_modules/
+/dist/
