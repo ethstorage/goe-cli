@@ -1,7 +1,7 @@
 import pLimit from 'p-limit';
 import { ethers } from 'ethers';
 import { FlatDirectory } from "ethstorage-sdk";
-import path, {join} from "path";
+import { join } from "path";
 import { existsSync, mkdirSync } from "fs";
 
 import {
@@ -20,37 +20,7 @@ import {
 } from "../utils/index.js";
 import { ContractDriver } from "./contract.js";
 
-// TODO
-import dotenv from "dotenv";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const envPath = path.resolve(__dirname, "../../.env");
-dotenv.config({ path: envPath });
-
-const privateKey = process.env.pk;
-
-export function getPrivateKey(): string {
-    // if (!wallet) wallet = "default"
-    //
-    // // Todo: 0xaddress find wallet
-    // const keyPath = process.env.HOME + "/.git3/keys"
-    // mkdirSync(keyPath, { recursive: true })
-    //
-    // const content = readFileSync(`${keyPath}/${wallet}`).toString()
-    // const [walletType, key] = content.split("\n")
-    //
-    // let etherWallet =
-    //     walletType === "privateKey" ? new ethers.Wallet(key) : ethers.Wallet.fromMnemonic(key)
-    //
-    // return etherWallet
-    if (!privateKey) {
-        throw new Error("pk is not defined in .env");
-    }
-    return privateKey;
-}
+import { getWallet } from "../../core/wallet/index.js";
 
 const ZERO_OID = "0000000000000000000000000000000000000000";
 const RPC_CONCURRENCY_LIMIT = 8;
@@ -80,7 +50,7 @@ class Eths {
     }
 
     static async create(gitdir: string, protocol: EthfsProtocol): Promise<Eths> {
-        const privateKey = getPrivateKey();
+        const decryptedWallet = await getWallet();
 
         const netConfig = protocol.netConfig;
         const rpcUrl = randomRPC(netConfig.rpc);
@@ -90,12 +60,12 @@ class Eths {
         const fd = await FlatDirectory.create({
             rpc: rpcUrl,
             ethStorageRpc: ethstorageRpc,
-            privateKey,
+            privateKey: decryptedWallet.privateKey,
             address: hubAddress
         });
         fd.setLogEnabled(false);
 
-        const wallet = new ethers.Wallet(privateKey);
+        const wallet = new ethers.Wallet(decryptedWallet.privateKey);
         const contractDriver = new ContractDriver(rpcUrl, wallet, hubAddress, ETHSAbi, fd);
         return new Eths(gitdir, protocol, contractDriver);
     }
