@@ -36,14 +36,17 @@ walletCmd
             }
 
             const {address, privateKey} = await createPrivateKeyWallet(password);
-            console.log(`✅ Wallet created successfully! Address: ${address}`);
-            console.log(`⚠️ IMPORTANT: Your private key (keep it safe!):`);
-            console.log(privateKey);
-            console.log(`
-                Please save this private key securely.
-                If you lose it, you will lose access to your wallet and funds.
-                Do NOT share it with anyone.
-            `);
+            console.log(`\n✅ Wallet created successfully!`);
+            console.log(`   Address: ${address}\n`);
+            console.log(`⚠️  IMPORTANT! Your private key is shown below. KEEP IT SAFE!\n`);
+            console.log(`   ${privateKey}\n`);
+
+            console.log(
+                `💡 Please save your private key securely.
+   - Do NOT share it with anyone.
+   - Losing it means you will permanently lose access to your wallet and funds.
+   - Consider storing it in a secure password manager or offline safe location.\n`
+            );
         } catch (e) {
             console.error(`❌ Error: ${(e as Error).message}`);
             process.exit(1);

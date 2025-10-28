@@ -29,7 +29,7 @@ export async function manualUnlockWallet(address: string, password: string): Pro
     const decryptionKey = deriveKey(password, salt);
 
     try {
-        decrypt(encryptedWallet.encryptedPrivateKey, Buffer.from(decryptionKey, 'hex').toString('utf8'));
+        decrypt(encryptedWallet.encryptedPrivateKey, Buffer.from(decryptionKey, 'hex'));
     } catch (e) {
         throw new Error('Invalid password');
     }
@@ -52,13 +52,11 @@ export async function getWallet(): Promise<DecryptedWallet> {
     if (!decryptionKey) {
         throw new Error(`Wallet ${address} is locked. Run 'eths wallet unlock <address>'`);
     }
-
     const encryptedWallet = loadEncryptedWallet(address);
     const privateKey = decrypt(
         encryptedWallet.encryptedPrivateKey,
-        Buffer.from(decryptionKey, 'hex').toString('utf8')
+        Buffer.from(decryptionKey, 'hex')
     );
-
     return {
         address,
         privateKey,

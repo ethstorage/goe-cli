@@ -35,6 +35,7 @@
     "ethstorage-sdk": "^4.1.4",
     "keytar": "^7.9.0",
     "p-limit": "^7.2.0",
+    "readline-sync": "^1.4.10",
     "rxjs": "^7.8.2",
     "rxjs-async-map": "^0.3.0-preview.0",
     "rxjs-stream": "^5.0.0",
