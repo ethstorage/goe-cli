@@ -1,9 +1,9 @@
 
 export const ETHSFactoryAbi = [
     "event RepoCreated(address indexed repo, address indexed creator, bytes repoName)",
-    "function createRepo(bytes memory repoName) external nonReentrant returns (address)",
+    "function createRepo(bytes repoName) external returns (address)",
     "function getUserRepoCount(address user) external view returns (uint256)",
-    "function getUserReposPaginated(address user, uint256 start, uint256 limit) external view returns (tuple(address repoAddress, uint256 creationTime, bytes repoName)[] memory)",
+    "function getUserReposPaginated(address user, uint256 start, uint256 limit) external view returns (tuple(address repoAddress, uint256 creationTime, bytes repoName)[])"
 ];
 
 

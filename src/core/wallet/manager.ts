@@ -50,7 +50,7 @@ export async function getWallet(): Promise<DecryptedWallet> {
     const address = addresses[0];
     const decryptionKey = await getDecryptionKey(address);
     if (!decryptionKey) {
-        throw new Error(`Wallet ${address} is locked. Run 'eths wallet unlock <address>'`);
+        throw new Error(`Wallet ${address} is locked. Run 'eths wallet unlock'`);
     }
     const encryptedWallet = loadEncryptedWallet(address);
     const privateKey = decrypt(
