@@ -2,7 +2,7 @@ import URLParse from "url-parse"
 import pLimit from "p-limit";
 import { ethers } from "ethers";
 
-import { Networks } from "../config/index.js"
+import { Networks } from "../../core/config/index.js"
 import { EthfsProtocol, NegotiationResult, PushRecord } from "../types/index.js";
 import { getLocalCommitOids } from "./git-helper.js";
 import { ContractDriver } from "../core/contract.js";

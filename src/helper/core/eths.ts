@@ -8,7 +8,7 @@ import {
     EthfsProtocol, FetchRef,
     PushRecord, PushRef, Ref
 } from "../types/index.js";
-import { ETHSAbi } from "../config/index.js";
+import { ETHSRepoAbi } from "../../core/config/index.js";
 import {
     createPackFileBuffer,
     findCommonAncestor,
@@ -66,7 +66,7 @@ class Eths {
         fd.setLogEnabled(false);
 
         const wallet = new ethers.Wallet(decryptedWallet.privateKey);
-        const contractDriver = new ContractDriver(rpcUrl, wallet, hubAddress, ETHSAbi, fd);
+        const contractDriver = new ContractDriver(rpcUrl, wallet, hubAddress, ETHSRepoAbi, fd);
         return new Eths(gitdir, protocol, contractDriver);
     }
 

@@ -1,4 +1,18 @@
-export const ETHSAbi = [
+
+export const ETHSFactoryAbi = [
+    "event RepoCreated(address indexed repo, address indexed creator, bytes repoName)",
+    "function createRepo(bytes memory repoName) external nonReentrant returns (address)",
+    "function getUserRepoCount(address user) external view returns (uint256)",
+    "function getUserReposPaginated(address user, uint256 start, uint256 limit) external view returns (tuple(address repoAddress, uint256 creationTime, bytes repoName)[] memory)",
+];
+
+
+export const ETHSRepoAbi = [
+    "function addPusher(address account) external",
+    "function removePusher(address account) external",
+    "function addMaintainer(address account) external",
+    "function setDefaultBranch(bytes calldata branchName) external",
+
     "function getDefaultBranch() external view returns (bytes memory name, bytes20 hash)",
     "function listBranches(uint256 start, uint256 limit) external view returns (tuple(bytes name, bytes20 hash)[] memory list)",
     "function canPush(address account) external view returns (bool)",
