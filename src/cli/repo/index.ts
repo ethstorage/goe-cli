@@ -1,4 +1,4 @@
-import { program, Option } from "commander";
+import { Command, Option } from "commander";
 import {Factory, Repo, RepoInfo} from "./contract.js";
 import { logInfo, logSuccess, logError } from "../utils/log.js";
 
@@ -9,9 +9,8 @@ const chainIdOption = new Option(
     "Specify the chain ID (e.g., 1=Mainnet, 5=Goerli, 11155111=Sepolia)"
 ).argParser((val) => parseInt(val, 10));
 
-const repoCmd = program
-    .command("repo")
-    .description("Manage decentralized repositories")
+const repoCmd = new Command('repo')
+    .description('Manage decentralized repositories')
     .addOption(chainIdOption);
 
 // =============== 🧱 Factory Commands =================

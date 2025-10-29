@@ -1,5 +1,5 @@
 // manager wallet CLI
-import { program } from "commander";
+import { Command } from "commander";
 import {
     createPrivateKeyWallet,
     listWalletAddresses,
@@ -9,7 +9,8 @@ import {
 import { promptPassword } from "./utils/utils.js";
 import { logInfo, logSuccess, logError } from "../utils/log.js";
 
-const walletCmd = program.command('wallet').description('Manage Ethereum wallets');
+const walletCmd = new Command('wallet')
+    .description('Manage Ethereum wallets');
 
 function getFirstWalletAddress(): string | null {
     const addresses = listWalletAddresses();
@@ -62,7 +63,7 @@ walletCmd
 
             const password = promptPassword('Enter wallet password: ');
             await manualUnlockWallet(address, password);
-            logSuccess(`Wallet ${address} unlocked`);
+            logSuccess(`Wallet ${address} unlocked. (Derived key restored in keychain)`);
         } catch (e: any) {
             logError(`Error: ${e.message}`);
             process.exit(1);
@@ -81,7 +82,7 @@ walletCmd
             }
 
             await lockWallet(address);
-            logSuccess(`Wallet ${address} locked`);
+            logSuccess(`Wallet ${address} locked. (Derived key removed from keychain).`);
         } catch (e: any) {
             logError(`Error: ${e.message}`);
             process.exit(1);
