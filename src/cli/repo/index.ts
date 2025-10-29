@@ -1,91 +1,129 @@
-// manager repo
-import {program} from "commander";
-import {
-    createRepo,
-    getUserReposPaginated,
-    setDefaultBranch,
-    addPusher,
-    removePusher,
-    addMaintainer,
-} from "./contract.js";
+import { program, Option } from "commander";
+import {Factory, Repo, RepoInfo} from "./contract.js";
+import { logInfo, logSuccess, logError } from "../utils/log.js";
 
-const repoCmd = program.command('repo').description('Manage repositories');
 
+// 🌐 Common chainId option
+const chainIdOption = new Option(
+    "-c, --chain-id <number>",
+    "Specify the chain ID (e.g., 1=Mainnet, 5=Goerli, 11155111=Sepolia)"
+).argParser((val) => parseInt(val, 10));
+
+const repoCmd = program
+    .command("repo")
+    .description("Manage decentralized repositories")
+    .addOption(chainIdOption);
+
+// =============== 🧱 Factory Commands =================
+
+// Create repository
 repoCmd
-    .command('create <name>')
-    .description('Create a new repository')
-    .action(async (name) => {
+    .command("create <name>")
+    .description("Create a new repository (requires --chain-id)")
+    .action(async (name, cmd) => {
+        const opts = cmd.parent?.opts?.() ?? {};
+        if (!opts.chainId) return logError("You must specify --chain-id.");
+
         try {
-            const address = await createRepo(name);
-            console.log(`✅ Repository "${name}" created at ${address}`);
-        } catch (e) {
-            console.error(`❌ Error: ${e.message}`);
+            logInfo(`Creating repository "${name}" on chain ${opts.chainId}...`);
+            const repoAddress = await Factory.createRepo(name, opts.chainId);
+            logSuccess(`Repository created successfully: ${repoAddress}`);
+            console.log(`🔗 Access via: eths://${repoAddress}:${opts.chainId}`);
+        } catch (e: any) {
+            logError(`Failed to create repository: ${e.message}`);
         }
     });
 
+// List repositories
 repoCmd
-    .command('list')
-    .description('List all your repositories')
-    .action(async () => {
+    .command("list")
+    .description("List repositories owned by the current wallet on the specified chain")
+    .option("-s, --start <number>", "Start index", (val) => parseInt(val, 10), 0)
+    .option("-l, --limit <number>", "Items per page", (val) => parseInt(val, 10), 20)
+    .action(async (cmd) => {
+        const opts = cmd.parent?.opts?.() ?? {};
+        if (!opts.chainId) return logError("You must specify --chain-id.");
+
         try {
-            const repos = await getUserReposPaginated();
-            if (repos.length === 0) {
-                console.log('No repositories found.');
-                return;
-            }
-            repos.forEach(r => {
-                console.log(`- ${r.name} (${r.address}) - created at ${r.creationTime}`);
+            const repos = await Factory.getUserReposPaginated(opts.chainId, cmd.start, cmd.limit);
+            if (repos.length === 0) return logInfo(`No repositories found on chain ${opts.chainId}.`);
+
+            logSuccess(`Found ${repos.length} repositories:`);
+            repos.forEach((repo: RepoInfo, idx: number) => {
+                console.log(`${idx + 1}. ${repo.name} (${repo.address})  Created: ${repo.creationTime.toLocaleString()}`);
             });
-        } catch (e) {
-            console.error(`❌ Error: ${e.message}`);
+        } catch (e: any) {
+            logError(`Failed to fetch repositories: ${e.message}`);
         }
     });
 
+
+// =============== 🧱 Repo Commands =================
+// Set default branch
 repoCmd
-    .command('set-default-branch <repo> <branch>')
-    .description('Set default branch for a repo')
-    .action(async (repo, branch) => {
+    .command("default-branch <repo-address|ENS> <branch>")
+    .description("Set the default branch of a repository (requires --chain-id)")
+    .action(async (repo, branch, cmd) => {
+        const opts = cmd.parent?.opts?.() ?? {};
+        if (!opts.chainId) return logError("You must specify --chain-id.");
+
         try {
-            await setDefaultBranch(repo, branch);
-            console.log(`✅ Default branch set to "${branch}" for repo ${repo}`);
-        } catch (e) {
-            console.error(`❌ Error: ${e.message}`);
+            logInfo(`Setting default branch for ${repo} to "${branch}"...`);
+            await Repo.setDefaultBranch(repo, opts.chainId, branch);
+            logSuccess(`Default branch updated to "${branch}".`);
+        } catch (e: any) {
+            logError(`Failed to set default branch: ${e.message}`);
         }
     });
 
+// Grant push permission
 repoCmd
-    .command('add-pusher <repo> <address>')
-    .description('Add a pusher to a repository')
-    .action(async (repo, addr) => {
+    .command("grant-push <repo-address|ENS> <address>")
+    .description("Grant push permission to an address (requires --chain-id)")
+    .action(async (repo, address, cmd) => {
+        const opts = cmd.parent?.opts?.() ?? {};
+        if (!opts.chainId) return logError("You must specify --chain-id.");
+
         try {
-            await addPusher(repo, addr);
-            console.log(`✅ Added pusher ${addr} to repo ${repo}`);
-        } catch (e) {
-            console.error(`❌ Error: ${e.message}`);
+            logInfo(`Granting push permission to ${address} on ${repo}...`);
+            await Repo.addPusher(repo, opts.chainId, address);
+            logSuccess(`Push permission granted to ${address}.`);
+        } catch (e: any) {
+            logError(`Failed to grant push permission: ${e.message}`);
         }
     });
 
+// Revoke push permission
 repoCmd
-    .command('remove-pusher <repo> <address>')
-    .description('Remove a pusher from a repository')
-    .action(async (repo, addr) => {
+    .command("revoke-push <repo-address|ENS> <address>")
+    .description("Revoke push permission from an address (requires --chain-id)")
+    .action(async (repo, address, cmd) => {
+        const opts = cmd.parent?.opts?.() ?? {};
+        if (!opts.chainId) return logError("You must specify --chain-id.");
+
         try {
-            await removePusher(repo, addr);
-            console.log(`✅ Removed pusher ${addr} from repo ${repo}`);
-        } catch (e) {
-            console.error(`❌ Error: ${e.message}`);
+            logInfo(`Revoking push permission from ${address}...`);
+            await Repo.removePusher(repo, opts.chainId, address);
+            logSuccess(`Push permission revoked from ${address}.`);
+        } catch (e: any) {
+            logError(`Failed to revoke push permission: ${e.message}`);
         }
     });
 
+// Grant maintainer permission
 repoCmd
-    .command('add-maintainer <repo> <address>')
-    .description('Add a maintainer to a repository')
-    .action(async (repo, addr) => {
+    .command("grant-maintainer <repo-address|ENS> <address>")
+    .description("Grant maintainer permission to an address (requires --chain-id)")
+    .action(async (repo, address, cmd) => {
+        const opts = cmd.parent?.opts?.() ?? {};
+        if (!opts.chainId) return logError("You must specify --chain-id.");
+
         try {
-            await addMaintainer(repo, addr);
-            console.log(`✅ Added maintainer ${addr} to repo ${repo}`);
-        } catch (e) {
-            console.error(`❌ Error: ${e.message}`);
+            logInfo(`Granting maintainer role to ${address} on ${repo}...`);
+            await Repo.addMaintainer(repo, opts.chainId, address);
+            logSuccess(`Maintainer role granted to ${address}.`);
+        } catch (e: any) {
+            logError(`Failed to grant maintainer role: ${e.message}`);
         }
     });
 

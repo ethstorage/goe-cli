@@ -3,14 +3,14 @@ import pLimit from "p-limit";
 import { ethers } from "ethers";
 
 import { Networks } from "../../core/config/index.js"
-import { EthfsProtocol, NegotiationResult, PushRecord } from "../types/index.js";
+import { EthsProtocol, NegotiationResult, PushRecord } from "../types/index.js";
 import { getLocalCommitOids } from "./git-helper.js";
 import { ContractDriver } from "../core/contract.js";
 
 export * from './log.js';
 export * from './git-helper.js';
 
-export async function parseEthsURI(uri: string): Promise<EthfsProtocol> {
+export async function parseEthsURI(uri: string): Promise<EthsProtocol> {
     const url = new URLParse(uri)
     let hostname = url.hostname
     if (!hostname || !ethers.isAddress(hostname)) {
@@ -25,7 +25,7 @@ export async function parseEthsURI(uri: string): Promise<EthfsProtocol> {
 
     return {
         remoteUrl: uri,
-        hubAddress: hostname,
+        repoAddress: hostname,
         chainId,
         netConfig,
     }

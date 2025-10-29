@@ -5,7 +5,7 @@ import { join } from "path";
 import { existsSync, mkdirSync } from "fs";
 
 import {
-    EthfsProtocol, FetchRef,
+    EthsProtocol, FetchRef,
     PushRecord, PushRef, Ref
 } from "../types/index.js";
 import { ETHSRepoAbi } from "../../core/config/index.js";
@@ -29,7 +29,7 @@ const DOWNLOAD_CONCURRENCY_LIMIT = 15;
 class Eths {
     gitdir: string
     remoteUrl: string
-    hubAddress: string
+    repoAddress: string
     chainId: number
     netConfig: Record<string, any>
 
@@ -38,10 +38,10 @@ class Eths {
 
     contractDriver: ContractDriver
 
-    constructor(gitdir: string, protocol: EthfsProtocol, contractDriver: ContractDriver) {
+    constructor(gitdir: string, protocol: EthsProtocol, contractDriver: ContractDriver) {
         this.gitdir = gitdir
         this.remoteUrl = protocol.remoteUrl
-        this.hubAddress = protocol.hubAddress
+        this.repoAddress = protocol.repoAddress
         this.chainId = protocol.chainId
         this.netConfig = protocol.netConfig
         this.contractDriver = contractDriver;
@@ -49,24 +49,24 @@ class Eths {
         this.refs = new Map()
     }
 
-    static async create(gitdir: string, protocol: EthfsProtocol): Promise<Eths> {
+    static async create(gitdir: string, protocol: EthsProtocol): Promise<Eths> {
         const decryptedWallet = await getWallet();
 
         const netConfig = protocol.netConfig;
         const rpcUrl = randomRPC(netConfig.rpc);
         const ethstorageRpc = randomRPC(netConfig.ethStorageRpc);
 
-        const hubAddress = protocol.hubAddress
+        const repoAddress = protocol.repoAddress
         const fd = await FlatDirectory.create({
             rpc: rpcUrl,
             ethStorageRpc: ethstorageRpc,
             privateKey: decryptedWallet.privateKey,
-            address: hubAddress
+            address: repoAddress
         });
         fd.setLogEnabled(false);
 
         const wallet = new ethers.Wallet(decryptedWallet.privateKey);
-        const contractDriver = new ContractDriver(rpcUrl, wallet, hubAddress, ETHSRepoAbi, fd);
+        const contractDriver = new ContractDriver(rpcUrl, wallet, repoAddress, ETHSRepoAbi, fd);
         return new Eths(gitdir, protocol, contractDriver);
     }
 

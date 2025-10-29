@@ -3,9 +3,9 @@ import { PushRecord } from "./contract-types.js";
 export * from './api-types.js';
 export * from './contract-types.js';
 
-export type EthfsProtocol = {
+export type EthsProtocol = {
     remoteUrl: string
-    hubAddress: string
+    repoAddress: string
     chainId: number
     netConfig: Record<string, any>
 

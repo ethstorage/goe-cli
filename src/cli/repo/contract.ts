@@ -1,9 +1,6 @@
 import { ethers, Contract } from "ethers";
 import { getWallet } from "../../core/wallet/index.js";
-import { Networks } from "../../core/config/index.js"
-
-import { ETHSFactoryAbi, ETHSRepoAbi } from "../../core/config/abis.js";
-
+import { ETHSFactoryAbi, ETHSRepoAbi, Networks } from "../../core/config/index.js"
 
 export interface RepoInfo {
     address: string;
@@ -11,81 +8,139 @@ export interface RepoInfo {
     creationTime: Date;
 }
 
-async function findWallet() {
-    const decryptedWallet = await getWallet();
-    return new ethers.Wallet(decryptedWallet.privateKey);
+/**
+ * ============================
+ * Common Helpers
+ * ============================
+ */
+
+function randomRPC(rpcs: string[]): string {
+    return rpcs[Math.floor(Math.random() * rpcs.length)];
 }
 
-// factory
-export async function createRepo(repoName: string): Promise<string | null> {
-    const signer = findWallet();
-    const contract: Contract = new ethers.Contract(ETHSHUB_ADDRESS, ETHSFactoryAbi, signer);
-
-    const tx = await contract.createRepo(ethers.toUtf8Bytes(repoName));
-    const receipt: ContractReceipt = await tx.wait();
-
-    const event: Event | undefined = receipt.events?.find(e => e.event === 'RepoCreated');
-    return event?.args?.repoAddress ?? null;
+function getNetworkConfig(chainId: number) {
+    const config = Networks[chainId];
+    if (!config) {
+        throw new Error(`Unsupported chain ID: ${chainId}.`);
+    }
+    return config;
 }
 
-export async function getUserReposPaginated(start = 0, limit = 20): Promise<RepoInfo[]> {
-    const signer = getWalletSigner();
-    const contract: Contract = new ethers.Contract(ETHSHUB_ADDRESS, ETHSFactoryAbi, signer);
-    const user: string = await signer.getAddress();
-
-    const repos: { repoAddress: string; repoName: Uint8Array; creationTime: ethers.BigNumber }[] =
-        await contract.getUserReposPaginated(user, start, limit);
-
-    return repos.map(r => ({
-        address: r.repoAddress,
-        name: ethers.utils.toUtf8String(r.repoName),
-        creationTime: new Date(r.creationTime.toNumber() * 1000),
-    }));
+async function getSigner(chainId: number): Promise<ethers.Signer> {
+    const walletData = await getWallet();
+    const netConfig = getNetworkConfig(chainId);
+    const rpcUrl = randomRPC(netConfig.rpc);
+    const provider = new ethers.JsonRpcProvider(rpcUrl);
+    return new ethers.Wallet(walletData.privateKey, provider);
 }
 
-// repo
-export async function setDefaultBranch(repoAddress: string, branchName: string): Promise<void> {
-    const signer = getWalletSigner();
-    const contract: Contract = new ethers.Contract(repoAddress, ETHSRepoAbi, signer);
-    const tx = await contract.setDefaultBranch(ethers.utils.toUtf8Bytes(branchName));
-    await tx.wait();
+async function waitForTx(tx: ethers.ContractTransactionResponse, action: string) {
+    const receipt = await tx.wait();
+    if (!receipt?.status) {
+        throw new Error(`❌ Transaction failed during: ${action} (tx: ${tx.hash})`);
+    }
+    return receipt;
 }
 
-export async function addPusher(repoAddress: string, account: string): Promise<void> {
-    const signer = getWalletSigner();
-    const contract: Contract = new ethers.Contract(repoAddress, ETHSHUB_ABI, signer);
-    const tx = await contract.addPusher(account);
-    await tx.wait();
+function validateAddress(address: string, label = "address") {
+    if (!ethers.isAddress(address)) {
+        throw new Error(`Invalid ${label}: ${address}`);
+    }
 }
 
-export async function removePusher(repoAddress: string, account: string): Promise<void> {
-    const signer = getWalletSigner();
-    const contract: Contract = new ethers.Contract(repoAddress, ETHSHUB_ABI, signer);
-    const tx = await contract.removePusher(account);
-    await tx.wait();
+async function getRepoContract(repoAddress: string, chainId: number) {
+    validateAddress(repoAddress, "repoAddress");
+    const signer = await getSigner(chainId);
+    return new Contract(repoAddress, ETHSRepoAbi, signer);
 }
 
-export async function addMaintainer(repoAddress: string, account: string): Promise<void> {
-    const signer = getWalletSigner();
-    const contract: Contract = new ethers.Contract(repoAddress, ETHSHUB_ABI, signer);
-    const tx = await contract.addMaintainer(account);
-    await tx.wait();
+/**
+ * ============================
+ * Factory Contract Methods
+ * ============================
+ */
+export namespace Factory {
+    export async function createRepo(repoName: string, chainId: number): Promise<string> {
+        const signer = await getSigner(chainId);
+        const { hubAddress } = getNetworkConfig(chainId);
+
+        const factory = new Contract(hubAddress, ETHSFactoryAbi, signer);
+        const tx = await factory.createRepo(ethers.toUtf8Bytes(repoName));
+        const receipt = await waitForTx(tx, "createRepo");
+
+        const iface = new ethers.Interface(ETHSFactoryAbi);
+        for (const log of receipt.logs) {
+            try {
+                const parsed = iface.parseLog(log);
+                if (parsed?.name === "RepoCreated") {
+                    return parsed.args.repo;
+                }
+            } catch { /* skip */ }
+        }
+        throw new Error("Transaction succeeded but no 'RepoCreated' event found");
+    }
+
+    export async function getUserReposPaginated(
+        chainId: number,
+        start = 0,
+        limit = 50
+    ): Promise<RepoInfo[]> {
+        const signer = await getSigner(chainId);
+        const { hubAddress } = getNetworkConfig(chainId);
+
+        const userAddress = await signer.getAddress();
+        const factory = new Contract(hubAddress, ETHSFactoryAbi, signer);
+        const repos = await factory.getUserReposPaginated(userAddress, start, limit);
+        return repos.map((r: any) => ({
+            address: r.repoAddress,
+            name: ethers.toUtf8String(r.repoName),
+            creationTime: new Date(Number(r.creationTime) * 1000),
+        }));
+    }
 }
 
-export async function canPush(repoAddress: string, account: string): Promise<boolean> {
-    const signer = getWalletSigner();
-    const contract: Contract = new ethers.Contract(repoAddress, ETHSHUB_ABI, signer);
-    return contract.canPush(account);
-}
+/**
+ * ============================
+ * Repository Contract Methods
+ * ============================
+ */
+export namespace Repo {
+    export async function setDefaultBranch(repoAddress: string, chainId: number, branchName: string) {
+        const repo = await getRepoContract(repoAddress, chainId);
+        const tx = await repo.setDefaultBranch(ethers.toUtf8Bytes(branchName));
+        await waitForTx(tx, "setDefaultBranch");
+    }
 
-export async function canForcePush(repoAddress: string, refName: string, account: string): Promise<boolean> {
-    const signer = getWalletSigner();
-    const contract: Contract = new ethers.Contract(repoAddress, ETHSHUB_ABI, signer);
-    return contract.canForcePush(account, ethers.utils.toUtf8Bytes(refName));
-}
+    export async function addPusher(repoAddress: string, chainId: number, account: string) {
+        validateAddress(account, "account");
+        const repo = await getRepoContract(repoAddress, chainId);
+        const tx = await repo.addPusher(account);
+        await waitForTx(tx, "addPusher");
+    }
 
-export async function canMaintain(repoAddress: string, account: string): Promise<boolean> {
-    const signer = getWalletSigner();
-    const contract: Contract = new ethers.Contract(repoAddress, ETHSHUB_ABI, signer);
-    return contract.canMaintain(account);
+    export async function removePusher(repoAddress: string, chainId: number, account: string) {
+        validateAddress(account, "account");
+        const repo = await getRepoContract(repoAddress, chainId);
+        const tx = await repo.removePusher(account);
+        await waitForTx(tx, "removePusher");
+    }
+
+    export async function addMaintainer(repoAddress: string, chainId: number, account: string) {
+        validateAddress(account, "account");
+        const repo = await getRepoContract(repoAddress, chainId);
+        const tx = await repo.addMaintainer(account);
+        await waitForTx(tx, "addMaintainer");
+    }
+
+    export async function canPush(repoAddress: string, chainId: number, account: string) {
+        validateAddress(account, "account");
+        const repo = await getRepoContract(repoAddress, chainId);
+        return repo.canPush(account);
+    }
+
+    export async function canForcePush(repoAddress: string, chainId: number, refName: string, account: string) {
+        validateAddress(account, "account");
+        const repo = await getRepoContract(repoAddress, chainId);
+        return repo.canForcePush(account, ethers.toUtf8Bytes(refName));
+    }
 }
