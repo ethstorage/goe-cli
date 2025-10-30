@@ -43,6 +43,6 @@ export const Networks: Record<number, any> = {
             rbfTimes: 5,
             boardcastTimes: 15,
         },
-        hubAddress: "0x974c0852906eFc13De7D28966653B29190Ae5966",
+        hubAddress: "0xca615028CdC0a54fD68E8D3F04f43b2a895655f5",
     },
 }

@@ -10,6 +10,7 @@ import { Update, GitContract } from "../types/index.js";
 const ZERO_ADDRESS_HEX = '0x0000000000000000000000000000000000000000';
 const MAX_RPC_RETRIES = 3;
 const RPC_RETRY_DELAY_MS = 1000;
+export const stringToHex = (s: string): string => ethers.hexlify(ethers.toUtf8Bytes(s));
 
 async function withRetry<T>(
     methodName: string,
@@ -111,7 +112,7 @@ export class ContractDriver {
     return list.map((item: any) => ({
       newOid: this.fromHex(item.newOid),
       parentOid: this.fromHex(item.parentOid),
-      packfileKey: this.fromHex(item.packfileKey),
+      packfileKey: ethers.toUtf8String(item.packfileKey),
       size: Number(item.size),
       timestamp: Number(item.timestamp),
       pusher: item.pusher
@@ -134,9 +135,10 @@ export class ContractDriver {
     const refNameBytes = ethers.toUtf8Bytes(refName);
     const parentOidHex = this.toHex(parentOid);
     const newOidHex = this.toHex(newOid);
+    const packfileKey = stringToHex(newOid);
 
     const tx = await withRetry("push", async () => {
-      return await this.contract.push(refNameBytes, parentOidHex, newOidHex, newOidHex, size);
+      return await this.contract.push(refNameBytes, parentOidHex, newOidHex, packfileKey, size);
     }, true);
     log(`[INFO] ${refName}: Sending push transaction, hash: ${tx.hash}`);
 
@@ -155,9 +157,10 @@ export class ContractDriver {
     const refNameBytes = ethers.toUtf8Bytes(refName);
     const parentOidHex = this.toHex(parentOid);
     const newOidHex = this.toHex(newOid);
+    const packfileKey = stringToHex(newOid);
 
     const tx = await withRetry("forcePush", async () => {
-      return await this.contract.forcePush(refNameBytes, newOidHex, newOidHex, size, parentOidHex, parentIndex);
+      return await this.contract.forcePush(refNameBytes, newOidHex, packfileKey, size, parentOidHex, parentIndex);
     }, true);
     log(`[INFO] ${refName}: Sending forcePush transaction, hash: ${tx.hash}`);
 
