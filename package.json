@@ -41,7 +41,8 @@
     "rxjs-async-map": "^0.3.0-preview.0",
     "rxjs-stream": "^5.0.0",
     "superpathjoin": "^2.0.1",
-    "url-parse": "^1.5.10"
+    "url-parse": "^1.5.10",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/node": "^24.9.1",
