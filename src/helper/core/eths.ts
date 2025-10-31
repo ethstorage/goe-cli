@@ -1,16 +1,17 @@
 import pLimit from 'p-limit';
+import fs from "fs/promises";
 import { ethers } from 'ethers';
 import { FlatDirectory } from "ethstorage-sdk";
 import { join } from "path";
 import { existsSync, mkdirSync } from "fs";
 
 import {
-    EthsProtocol, FetchRef,
+    EthsProtocol, FetchRef, PackCreationResult,
     PushRecord, PushRef, Ref
 } from "../types/index.js";
 import { ETHSRepoAbi } from "../../core/config/index.js";
 import {
-    createPackFileBuffer,
+    createCommitBoundaryPacksOptimized,
     findCommonAncestor,
     findMatchingLocalBranch,
     getOidFromRef,
@@ -261,28 +262,44 @@ class Eths {
             }
 
             const newOid = await getOidFromRef(src);
-            const parentOid = this.refs.get(dst) || "";
+            const parentOid = this.refs.get(dst) || null;
 
             // 1. pack file
-            const packFile = await createPackFileBuffer(newOid, parentOid);
+            const result = await createCommitBoundaryPacksOptimized(newOid, parentOid, this.gitdir);
 
-            // 2. upload
-            log('');
-            log(`[PROGRESS] Uploading packfile (Size: ${packFile.length} bytes) to EthStorage...`);
-            let status = await this.contractDriver.uploadPack(dst, newOid, packFile);
-            if (!status) {
-                return `error ${dst} upload pack file fail`;
-            }
+            // 2. upload packfiles
+            try {
+                if (result.chunks.length === 0) {
+                    log(`[INFO] No commits to push for ${dst}. Performing ref update only.`);
+                } else {
+                    log('');
+                    log(`[PROGRESS] Starting upload of ${result.chunks.length} Packfiles to EthStorage for ref ${dst}...`);
 
-            // 3. update
-            status = await this.contractDriver.writeRef({
-                refName: dst,
-                parentOid: parentOid,
-                newOid: newOid,
-                size: packFile.length,
-            });
-            if (!status) {
-                return `error ${dst} update refs fail`;
+                    for (const chunk of result.chunks) {
+                        // 2.1 upload packfile
+                        let status = await this.contractDriver.uploadPack(dst, chunk.endOid, chunk.path);
+                        if (!status) {
+                            return `error ${dst} upload pack file fail`;
+                        }
+
+                        // 2.2 update ref
+                        status = await this.contractDriver.writeRef({
+                            refName: dst,
+                            parentOid: chunk.startOid,
+                            newOid: chunk.endOid,
+                            size: chunk.size,
+                        });
+                        if (!status) {
+                            return `error ${dst} update refs fail`;
+                        }
+                    }
+                }
+            } finally {
+                if (result.tempDir) {
+                    await fs.rm(result.tempDir, {recursive: true, force: true}).catch(err => {
+                        log(`[WARNING] Failed to remove temp directory ${result.tempDir}: ${err}`);
+                    });
+                }
             }
 
             return `ok ${dst}`;
@@ -311,40 +328,64 @@ class Eths {
             const commonIndex = result.commonIndex;
 
             // 2. create packfile
-            let packFile: Buffer;
-            let parentOid: string;
+            let packFileResult: PackCreationResult;
             let parentIndex: number;
             if (commonRecord) {
                 const commonOid = commonRecord.newOid;
-                packFile = await createPackFileBuffer(newOid, commonOid);
-                parentOid = commonOid;
+                packFileResult = await createCommitBoundaryPacksOptimized(newOid, commonOid, this.gitdir);
                 parentIndex = commonIndex;
-                log(`[INFO] Force push: Partial override (Ancestor: ${parentOid}, Index: ${parentIndex})`);
+                log(`[INFO] Force push: Partial override (Ancestor: ${commonOid}, Index: ${parentIndex})`);
             } else {
-                packFile = await createPackFileBuffer(newOid);
-                parentOid = ZERO_OID;
+                packFileResult = await createCommitBoundaryPacksOptimized(newOid, null, this.gitdir);
                 parentIndex = 0;
                 log(`[INFO] Force push: Full override (No common ancestor).`);
             }
 
             // 3. upload Pack file
             log('');
-            log(`[PROGRESS] Uploading packfile (Size: ${packFile.length} bytes) to EthStorage...`);
-            let status = await this.contractDriver.uploadPack(dst, newOid, packFile);
-            if (!status) {
-                return `error ${dst} upload pack file fail`;
-            }
+            try {
+                if (packFileResult.chunks.length === 0) {
+                    log(`[INFO] No commits to push for ${dst}. Performing ref update only.`);
+                } else {
+                    log('');
+                    log(`[PROGRESS] Starting upload of ${packFileResult.chunks.length} Packfiles to EthStorage for ref ${dst}...`);
 
-            // 4. update refs
-            status = await this.contractDriver.writeForceRef({
-                refName: dst,
-                parentOid: parentOid,
-                newOid: newOid,
-                size: packFile.length,
-                parentIndex: parentIndex,
-            });
-            if (!status) {
-                return `error ${dst} update refs fail`;
+                    for (const chunk of packFileResult.chunks) {
+                        // 3.1 upload packfile
+                        let status = await this.contractDriver.uploadPack(dst, chunk.endOid, chunk.path);
+                        if (!status) {
+                            return `error ${dst} upload pack file fail`;
+                        }
+
+                        // 3.2 update ref
+                        if (parentIndex !== -1) {
+                            status = await this.contractDriver.writeForceRef({
+                                refName: dst,
+                                parentOid: chunk.startOid || ZERO_OID,
+                                newOid: chunk.endOid,
+                                size: chunk.size,
+                                parentIndex: parentIndex,
+                            });
+                            parentIndex = -1;
+                        } else {
+                            status = await this.contractDriver.writeRef({
+                                refName: dst,
+                                parentOid: chunk.startOid,
+                                newOid: chunk.endOid,
+                                size: chunk.size,
+                            });
+                        }
+                        if (!status) {
+                            return `error ${dst} update refs fail`;
+                        }
+                    }
+                }
+            } finally {
+                if (packFileResult.tempDir) {
+                    await fs.rm(packFileResult.tempDir, {recursive: true, force: true}).catch(err => {
+                        log(`[WARNING] Failed to remove temp directory ${packFileResult.tempDir}: ${err}`);
+                    });
+                }
             }
 
             return `ok ${dst}`;

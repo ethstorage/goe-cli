@@ -3,6 +3,7 @@ import * as path from 'path';
 import { finished } from 'node:stream/promises';
 import { ethers } from 'ethers';
 import { UploadType, FlatDirectory } from "ethstorage-sdk";
+import { NodeFile } from "ethstorage-sdk/file";
 
 import { log } from "../utils/index.js"
 import { Update, GitContract } from "../types/index.js";
@@ -174,7 +175,7 @@ export class ContractDriver {
 
   // --- FlatDirectory Operations (No RPC Retry - relies on FlatDirectory internal retry) ---
 
-  async uploadPack(dst: string, fileKey: string, packFile: Buffer): Promise<boolean> {
+  async uploadPack(dst: string, fileKey: string, packFilePath: string): Promise<boolean> {
     let status = true;
     let currentSuccessIndex = -1;
 
@@ -206,9 +207,10 @@ export class ContractDriver {
     const hashesMap = await this.flatDirectory.fetchHashes([fileKey]);
     const hashes = hashesMap[fileKey] || [];
 
+    const file = new NodeFile(packFilePath);
     const request = {
       key: fileKey,
-      content: packFile,
+      content: file,
       chunkHashes: hashes,
       type: UploadType.Blob,
       callback: uploadCallback

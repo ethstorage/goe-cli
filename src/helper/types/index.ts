@@ -20,3 +20,15 @@ export interface NegotiationResult {
     missingPacks: PushRecord[];
     isFullHistory: boolean;
 }
+
+export interface PackFileChunk {
+    path: string;
+    size: number;
+    startOid: string; // parent OID used as base for this pack
+    endOid: string;   // last commit included in this pack
+}
+
+export interface PackCreationResult {
+    chunks: PackFileChunk[];
+    tempDir: string;
+}
