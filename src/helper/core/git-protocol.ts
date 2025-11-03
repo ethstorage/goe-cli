@@ -3,6 +3,7 @@ import { asyncMap } from 'rxjs-async-map'
 import { rxToStream, streamToStringRx } from 'rxjs-stream'
 import { filter, map, mergeMap, scan } from 'rxjs/operators'
 import { Api, Command, GitCommands } from '../types/index.js';
+import { log } from "../utils/index.js";
 
 const ONE_LINE_COMMANDS = [
   GitCommands.capabilities,
@@ -25,8 +26,6 @@ export default async function GitRemoteHelper({ stdin, api }: {
       map(line => line.trimEnd()),
       scan(
           (acc, line) => {
-            // console.error('====')
-            // console.error(line)
             // log('Scanning #NH7FyX', JSON.stringify({ acc, line }))
             // If we emitted the last value, then we ignore all of the current lines
             // and start fresh on the next "batch"
@@ -48,7 +47,7 @@ export default async function GitRemoteHelper({ stdin, api }: {
             if (ONE_LINE_COMMANDS.find(command => line.startsWith(command))) {
               // If we have other lines waiting for emission, something went wrong
               if (linesWaitingToBeEmitted.length > 0) {
-                console.error(
+                log(
                     'Got one line command with lines waiting #ompfQK',
                     JSON.stringify({ linesWaitingToBeEmitted })
                 )

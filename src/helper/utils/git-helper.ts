@@ -261,8 +261,8 @@ async function createPackForRange(
   const revs = parentOid ? `${endOid}\n^${parentOid}\n` : `${endOid}\n`;
   const buf = await spawnWithOutput(
       'git',
-      ['pack-objects', '--stdout', '--revs', '--thin', '--delta-base-offset'],
-      { cwd: path.dirname(gitdir), stdio: ['pipe','pipe','inherit'] },
+      ['pack-objects', '--stdout', '--revs', '--thin', '--delta-base-offset', '--quiet'],
+      { cwd: path.dirname(gitdir), stdio: ['pipe', 'pipe', 'pipe'] },
       Buffer.from(revs, 'utf8')
   );
 
@@ -271,7 +271,7 @@ async function createPackForRange(
   return { path: packPath, size: buf.length };
 }
 
-export async function createCommitBoundaryPacksOptimized(
+export async function createCommitBoundaryPacks(
     newOid: string,
     parentOid: string | null,
     gitdir: string,

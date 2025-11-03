@@ -11,7 +11,7 @@ import {
 } from "../types/index.js";
 import { ETHSRepoAbi } from "../../core/config/index.js";
 import {
-    createCommitBoundaryPacksOptimized,
+    createCommitBoundaryPacks,
     findCommonAncestor,
     findMatchingLocalBranch,
     getOidFromRef,
@@ -72,7 +72,6 @@ class Eths {
     }
 
     async doList(forPush: boolean) {
-        console.error("-----doList-----")
         const outLines: string[] = [];
         const refs = await this.getRefs();
 
@@ -90,8 +89,6 @@ class Eths {
     }
 
     async doFetch(refs: FetchRef[]) {
-        console.error("-----doFetch-----", refs)
-
         const headRef = refs.find(item => item.ref === 'HEAD');
         const branchRefs = refs.filter(item => item.ref.startsWith('refs/heads/'));
         let finalBranchRefs: FetchRef[] = [...branchRefs];
@@ -120,7 +117,6 @@ class Eths {
     }
 
     async doPush(refs: PushRef[]): Promise<string> {
-        console.error("-----doPush-----")
         let outLines: string[] = []
 
         for (let ref of refs) {
@@ -265,7 +261,8 @@ class Eths {
             const parentOid = this.refs.get(dst) || null;
 
             // 1. pack file
-            const result = await createCommitBoundaryPacksOptimized(newOid, parentOid, this.gitdir);
+            log('[INFO] Preparing Git packfiles, this may take a while...');
+            const result = await createCommitBoundaryPacks(newOid, parentOid, this.gitdir);
 
             // 2. upload packfiles
             try {
@@ -328,15 +325,16 @@ class Eths {
             const commonIndex = result.commonIndex;
 
             // 2. create packfile
+            log('[INFO] Preparing Git packfiles, this may take a while...');
             let packFileResult: PackCreationResult;
             let parentIndex: number;
             if (commonRecord) {
                 const commonOid = commonRecord.newOid;
-                packFileResult = await createCommitBoundaryPacksOptimized(newOid, commonOid, this.gitdir);
+                packFileResult = await createCommitBoundaryPacks(newOid, commonOid, this.gitdir);
                 parentIndex = commonIndex;
                 log(`[INFO] Force push: Partial override (Ancestor: ${commonOid}, Index: ${parentIndex})`);
             } else {
-                packFileResult = await createCommitBoundaryPacksOptimized(newOid, null, this.gitdir);
+                packFileResult = await createCommitBoundaryPacks(newOid, null, this.gitdir);
                 parentIndex = 0;
                 log(`[INFO] Force push: Full override (No common ancestor).`);
             }

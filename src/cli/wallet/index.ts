@@ -1,4 +1,5 @@
 // manager wallet CLI
+import chalk from "chalk";
 import { Command } from "commander";
 import {
     createPrivateKeyWallet,
@@ -35,15 +36,7 @@ walletCmd
             }
 
             const { address, privateKey } = await createPrivateKeyWallet(password);
-
-            logSuccess(`Wallet created successfully!`);
-            logInfo(`   Address: ${address}`);
-            logError(`⚠️ IMPORTANT: Your private key is shown below. KEEP IT SAFE!`);
-            logInfo(`   ${privateKey}\n`);
-            logInfo(`💡 Please save your private key securely:
-  - Do NOT share it with anyone.
-  - Losing it means permanent loss of access to your wallet and funds.
-  - Consider storing it in a secure password manager or offline safe location.`);
+            printWalletCreationSummary(address, privateKey);
         } catch (e: any) {
             logError(`Error: ${e.message}`);
             process.exit(1);
@@ -101,5 +94,45 @@ walletCmd
         logInfo('Wallets:');
         addresses.forEach(addr => logInfo(`- ${addr}`));
     });
+
+export function printWalletCreationSummary(address: string, privateKey: string) {
+    const redBold = chalk.redBright.bold;
+    const gold = chalk.hex('#FFD700').bold;
+    const whiteBold = chalk.black.bold;
+    const styledPrivateKey = chalk.redBright.bold(privateKey);
+
+    logSuccess(`Wallet created successfully!\n`);
+
+    console.log(`
+${gold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}
+${gold('🚨  CRITICAL WARNING & USAGE GUIDELINES  🚨')}
+${gold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}
+
+${whiteBold('💠 Wallet Address:')}
+  ${chalk.cyanBright(address)}
+
+${whiteBold('🔑 Private Key (SAVE IMMEDIATELY!):')}
+  ${styledPrivateKey}
+
+${gold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}
+${gold('📜  ETHS Wallet Usage Policy')}
+${gold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}
+
+${gold('1️⃣  FUND GAS FIRST')}
+  • Send a small amount of ${whiteBold('native gas token')} (e.g. ETH)  
+    to this wallet before performing any operations.
+
+${gold('2️⃣  LIMITED PURPOSE WALLET')}
+  • This wallet is ${redBold('STRICTLY for ETHS protocol data uploads')}  
+    and contract interactions.
+  • ${redBold('DO NOT')} store or transfer large funds here.
+
+${gold('3️⃣  PRIVATE KEY SAFETY')}
+  • ${redBold('NEVER')} share your private key with anyone.  
+  • Losing this key = ${redBold('PERMANENT LOSS')} of access.  
+
+${gold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}
+`);
+}
 
 export default walletCmd;
