@@ -48,7 +48,7 @@ function spawnNoOutput(
     child.on('close', (code, signal) =>
         code === 0 ? resolve() : reject(new Error(`Command "${command} ${args.join(' ')}" exited ${code ?? signal}`))
     );
-    if (child.stdin) child.stdin.end(input);
+    if (input && child.stdin) child.stdin.end(input);
   });
 }
 

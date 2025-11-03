@@ -244,9 +244,6 @@ class Eths {
         for (const { value: packFilePath } of success) {
             await runGitPackFromFile(packFilePath, this.gitdir);
         }
-
-        // finish
-        process.stdout.write("\n");
     }
 
     // push

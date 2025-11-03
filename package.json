@@ -1,6 +1,6 @@
 {
-  "name": "eths-git-remote",
-  "version": "0.1.0",
+  "name": "eths-git",
+  "version": "0.1.0-beta",
   "type": "module",
   "bin": {
     "git-remote-eths": "./dist/helper/index.js",
