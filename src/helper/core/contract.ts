@@ -222,37 +222,59 @@ export class ContractDriver {
   }
 
   async downloadPackFile(fileName: string, filePath: string): Promise<string> {
-    await withRetry("downloadPackFile", async () => {
-      await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.promises.mkdir(path.dirname(filePath), {recursive: true});
+    const handle = await fs.promises.open(filePath, "w");
+    const writePromises: Promise<any>[] = [];
 
-      let totalSize = 0;
+    let totalSize = 0;
+    let currentOffset = 0;
+    let finishedChunks = 0;
+    let lastLogTime = Date.now();
+
+    try {
       await new Promise<void>((resolve, reject) => {
-        const writeStream = fs.createWriteStream(filePath);
-        writeStream.on('error', (err) => {
-          writeStream.destroy();
-          try { fs.unlinkSync(filePath); } catch {}
-          reject(err);
-        });
-
         this.flatDirectory.download(fileName, {
-          onProgress: (progress, count, chunk) => {
+          onProgress: (progress: number, count: number, chunk: Uint8Array) => {
+            const writeOffset = currentOffset;
+            currentOffset += chunk.length;
             totalSize += chunk.length;
-            writeStream.write(chunk);
+
+            const p = handle.write(chunk, 0, chunk.length, writeOffset)
+                .then(() => {
+                  finishedChunks++;
+                  const now = Date.now();
+                  if (now - lastLogTime > 1000 || finishedChunks === count) {
+                    const percent = ((finishedChunks / count) * 100).toFixed(2);
+                    log(`[${new Date().toLocaleTimeString()}] Download ${fileName}: ${percent}% (${finishedChunks}/${count})`);
+                    lastLogTime = now;
+                  }
+                })
+                .catch(err => {
+                  reject(err);
+                  throw err;
+                });
+            writePromises.push(p);
           },
           onFail: (err: Error) => reject(err),
-          onFinish: () => writeStream.end()
+          onFinish: async () => {
+            await Promise.all(writePromises);
+            await handle.close();
+            log(`[INFO] Download finished for ${fileName}. Total size: ${totalSize} bytes.`);
+            resolve();
+          },
         });
-
-        finished(writeStream)
-            .then(() => {
-              log(`[INFO] Download finished for ${fileName}. Total size: ${totalSize} bytes.`);
-              resolve();
-            })
-            .catch(reject);
       });
-    });
 
-    return filePath;
+      return filePath;
+    } catch (err) {
+      try {
+        await handle.close();
+      } catch {}
+      try {
+        await fs.promises.unlink(filePath);
+      } catch {}
+      throw err;
+    }
   }
 
   async close() {
