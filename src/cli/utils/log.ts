@@ -1,14 +1,24 @@
 import chalk from "chalk";
 
+function getTimestamp(): string {
+    return new Date().toLocaleTimeString();
+}
+
 // 🧰 Utility log helpers
-export function logInfo(msg: string) {
-    console.log(chalk.blueBright(`📘 [${new Date().toLocaleTimeString()}] ${msg}`));
-}
+export const logger = {
+    normal(msg: string) {
+        console.log(`📘 [${getTimestamp()}] ${msg}`);
+    },
 
-export function logSuccess(msg: string) {
-    console.log(chalk.greenBright(`✅ [${new Date().toLocaleTimeString()}] ${msg}`));
-}
+    info(msg: string) {
+        console.log(chalk.blueBright(`📘 [${getTimestamp()}] ${msg}`));
+    },
 
-export function logError(msg: string) {
-    console.error(chalk.redBright(`❌ [${new Date().toLocaleTimeString()}] ${msg}`));
-}
+    success(msg: string) {
+        console.log(chalk.greenBright(`✅ [${getTimestamp()}] ${msg}`));
+    },
+
+    error(msg: string) {
+        console.error(chalk.redBright(`❌ [${getTimestamp()}] ${msg}`));
+    }
+};

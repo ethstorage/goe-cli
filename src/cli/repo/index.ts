@@ -1,6 +1,6 @@
 import { Command, Option } from "commander";
 import {Factory, Repo, RepoInfo} from "./contract.js";
-import { logInfo, logSuccess, logError } from "../utils/log.js";
+import { logger } from "../utils/log.js";
 
 
 // 🌐 Common chainId option
@@ -21,15 +21,15 @@ repoCmd
     .description("Create a new repository (requires --chain-id)")
     .action(async (name, cmd) => {
         const chainId = cmd.chainId;
-        if (!chainId) return logError("You must specify --chain-id.");
+        if (!chainId) return logger.error("You must specify --chain-id.");
 
         try {
-            logInfo(`Creating repository "${name}" on chain ${chainId}...`);
+            logger.info(`Creating repository "${name}" on chain ${chainId}...`);
             const repoAddress = await Factory.createRepo(name, chainId);
-            logSuccess(`Repository created successfully: ${repoAddress}`);
-            console.log(`🔗 Access via: eths://${repoAddress}:${chainId}`);
+            logger.success(`Repository created successfully: ${repoAddress}`);
+            logger.normal(`🔗 Access via: eths://${repoAddress}:${chainId}`);
         } catch (e: any) {
-            logError(`Failed to create repository: ${e.message}`);
+            logger.error(`Failed to create repository: ${e.message}`);
         }
     });
 
@@ -42,18 +42,18 @@ repoCmd
     .option("-l, --limit <number>", "Items per page", (val) => parseInt(val, 10), 20)
     .action(async (cmd) => {
         const chainId = cmd.chainId;
-        if (!chainId) return logError("You must specify --chain-id.");
+        if (!chainId) return logger.error("You must specify --chain-id.");
 
         try {
             const repos = await Factory.getUserReposPaginated(chainId, cmd.start, cmd.limit);
-            if (repos.length === 0) return logInfo(`No repositories found on chain ${chainId}.`);
+            if (repos.length === 0) return logger.info(`No repositories found on chain ${chainId}.`);
 
-            logSuccess(`Found ${repos.length} repositories:`);
+            logger.success(`Found ${repos.length} repositories:`);
             repos.forEach((repo: RepoInfo, idx: number) => {
-                console.log(`${idx + 1}. ${repo.name} (${repo.address})  Created: ${repo.creationTime.toLocaleString()}`);
+                logger.normal(`${idx + 1}. ${repo.name} (${repo.address})  Created: ${repo.creationTime.toLocaleString()}`);
             });
         } catch (e: any) {
-            logError(`Failed to fetch repositories: ${e.message}`);
+            logger.error(`Failed to fetch repositories: ${e.message}`);
         }
     });
 
@@ -66,14 +66,14 @@ repoCmd
     .description("Set the default branch of a repository (requires --chain-id)")
     .action(async (repo, branch, cmd) => {
         const chainId = cmd.chainId;
-        if (!chainId) return logError("You must specify --chain-id.");
+        if (!chainId) return logger.error("You must specify --chain-id.");
 
         try {
-            logInfo(`Setting default branch for ${repo} to "${branch}"...`);
+            logger.info(`Setting default branch for ${repo} to "${branch}"...`);
             await Repo.setDefaultBranch(repo, chainId, branch);
-            logSuccess(`Default branch updated to "${branch}".`);
+            logger.success(`Default branch updated to "${branch}".`);
         } catch (e: any) {
-            logError(`Failed to set default branch: ${e.message}`);
+            logger.error(`Failed to set default branch: ${e.message}`);
         }
     });
 
@@ -84,14 +84,14 @@ repoCmd
     .description("Grant push permission to an address (requires --chain-id)")
     .action(async (repo, address, cmd) => {
         const chainId = cmd.chainId;
-        if (!chainId) return logError("You must specify --chain-id.");
+        if (!chainId) return logger.error("You must specify --chain-id.");
 
         try {
-            logInfo(`Granting push permission to ${address} on ${repo}...`);
+            logger.info(`Granting push permission to ${address} on ${repo}...`);
             await Repo.addPusher(repo, chainId, address);
-            logSuccess(`Push permission granted to ${address}.`);
+            logger.success(`Push permission granted to ${address}.`);
         } catch (e: any) {
-            logError(`Failed to grant push permission: ${e.message}`);
+            logger.error(`Failed to grant push permission: ${e.message}`);
         }
     });
 
@@ -102,14 +102,14 @@ repoCmd
     .description("Revoke push permission from an address (requires --chain-id)")
     .action(async (repo, address, cmd) => {
         const chainId = cmd.chainId;
-        if (!chainId) return logError("You must specify --chain-id.");
+        if (!chainId) return logger.error("You must specify --chain-id.");
 
         try {
-            logInfo(`Revoking push permission from ${address}...`);
+            logger.info(`Revoking push permission from ${address}...`);
             await Repo.removePusher(repo, chainId, address);
-            logSuccess(`Push permission revoked from ${address}.`);
+            logger.success(`Push permission revoked from ${address}.`);
         } catch (e: any) {
-            logError(`Failed to revoke push permission: ${e.message}`);
+            logger.error(`Failed to revoke push permission: ${e.message}`);
         }
     });
 
@@ -120,14 +120,14 @@ repoCmd
     .description("Grant maintainer permission to an address (requires --chain-id)")
     .action(async (repo, address, cmd) => {
         const chainId = cmd.chainId;
-        if (!chainId) return logError("You must specify --chain-id.");
+        if (!chainId) return logger.error("You must specify --chain-id.");
 
         try {
-            logInfo(`Granting maintainer role to ${address} on ${repo}...`);
+            logger.info(`Granting maintainer role to ${address} on ${repo}...`);
             await Repo.addMaintainer(repo, chainId, address);
-            logSuccess(`Maintainer role granted to ${address}.`);
+            logger.success(`Maintainer role granted to ${address}.`);
         } catch (e: any) {
-            logError(`Failed to grant maintainer role: ${e.message}`);
+            logger.error(`Failed to grant maintainer role: ${e.message}`);
         }
     });
 

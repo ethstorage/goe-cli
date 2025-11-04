@@ -2,6 +2,7 @@
 
 import GitRemoteHelper from './core/git-protocol.js';
 import { createImpl } from './core/eth-api.js';
+import { log } from './utils/log.js';
 
 async function main() {
   let api;
@@ -12,7 +13,7 @@ async function main() {
       api
     });
   } catch (err) {
-    console.error('FATAL', err);
+    log('FATAL', err);
     process.exitCode = 1;
   } finally {
     if (api && typeof api.close === 'function') {

@@ -8,6 +8,7 @@ import os from "os";
 import pLimit from "p-limit";
 
 import { PackCreationResult, PackFileChunk } from "../types/index.js";
+import { log } from "./log.js";
 
 function spawnWithOutput(
     command: string,
@@ -99,7 +100,7 @@ export async function getLocalCommitOids(refName: string): Promise<Set<string>> 
     const output = await runCmdCapture(['git', 'rev-list', refName]);
     return new Set(output.trim().split('\n').filter(Boolean));
   } catch (err) {
-    console.error(`Warning: 'git rev-list ${refName}' failed: ${err}`);
+    log(`Warning: 'git rev-list ${refName}' failed: ${err}`);
     return new Set();
   }
 }

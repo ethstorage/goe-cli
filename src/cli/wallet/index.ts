@@ -7,8 +7,8 @@ import {
     lockWallet,
     manualUnlockWallet
 } from "../../core/wallet/index.js";
-import { promptPassword } from "./utils/utils.js";
-import { logInfo, logSuccess, logError } from "../utils/log.js";
+import { promptPassword } from "./utils.js";
+import { logger } from "../utils/log.js";
 
 const walletCmd = new Command('wallet')
     .description('Manage Ethereum wallets');
@@ -26,19 +26,19 @@ walletCmd
         try {
             const addresses = listWalletAddresses();
             if (addresses && addresses.length > 0) {
-                return logError('Wallet already exists.');
+                return logger.error('Wallet already exists.');
             }
 
             const password = promptPassword('Enter password to encrypt wallet: ');
             const confirm = promptPassword('Confirm password: ');
             if (password !== confirm) {
-                return logError('Passwords do not match.');
+                return logger.error('Passwords do not match.');
             }
 
             const { address, privateKey } = await createPrivateKeyWallet(password);
             printWalletCreationSummary(address, privateKey);
         } catch (e: any) {
-            logError(`Error: ${e.message}`);
+            logger.error(`Error: ${e.message}`);
             process.exit(1);
         }
     });
@@ -51,14 +51,14 @@ walletCmd
         try {
             const address = getFirstWalletAddress();
             if (!address) {
-                return logError("Wallet not found. Run 'eths wallet create' to create one.");
+                return logger.error("Wallet not found. Run 'eths wallet create' to create one.");
             }
 
             const password = promptPassword('Enter wallet password: ');
             await manualUnlockWallet(address, password);
-            logSuccess(`Wallet ${address} unlocked. (Derived key restored in keychain)`);
+            logger.success(`Wallet ${address} unlocked. (Derived key restored in keychain)`);
         } catch (e: any) {
-            logError(`Error: ${e.message}`);
+            logger.error(`Error: ${e.message}`);
             process.exit(1);
         }
     });
@@ -71,13 +71,13 @@ walletCmd
         try {
             const address = getFirstWalletAddress();
             if (!address) {
-                return logError("Wallet not found. Run 'eths wallet create' to create one.");
+                return logger.error("Wallet not found. Run 'eths wallet create' to create one.");
             }
 
             await lockWallet(address);
-            logSuccess(`Wallet ${address} locked. (Derived key removed from keychain).`);
+            logger.success(`Wallet ${address} locked. (Derived key removed from keychain).`);
         } catch (e: any) {
-            logError(`Error: ${e.message}`);
+            logger.error(`Error: ${e.message}`);
             process.exit(1);
         }
     });
@@ -89,27 +89,29 @@ walletCmd
     .action(() => {
         const addresses = listWalletAddresses();
         if (addresses.length === 0) {
-            return logInfo('No wallets found. Create one with `eths wallet create`');
+            return logger.info('No wallets found. Create one with `eths wallet create`');
         }
-        logInfo('Wallets:');
-        addresses.forEach(addr => logInfo(`- ${addr}`));
+        logger.info('Wallets:');
+        addresses.forEach(addr => logger.info(`- ${addr}`));
     });
 
 export function printWalletCreationSummary(address: string, privateKey: string) {
     const redBold = chalk.redBright.bold;
     const gold = chalk.hex('#FFD700').bold;
     const whiteBold = chalk.black.bold;
+
+    const styleAddress = chalk.cyanBright.bold(address);
     const styledPrivateKey = chalk.redBright.bold(privateKey);
 
-    logSuccess(`Wallet created successfully!\n`);
+    logger.success(`Wallet created successfully!\n`);
 
-    console.log(`
+    logger.normal(`
 ${gold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}
 ${gold('🚨  CRITICAL WARNING & USAGE GUIDELINES  🚨')}
 ${gold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}
 
 ${whiteBold('💠 Wallet Address:')}
-  ${chalk.cyanBright(address)}
+  ${styleAddress}
 
 ${whiteBold('🔑 Private Key (SAVE IMMEDIATELY!):')}
   ${styledPrivateKey}
