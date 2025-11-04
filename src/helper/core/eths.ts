@@ -234,10 +234,12 @@ class Eths {
         const failed = results
             .filter(r => r.status === 'rejected') as PromiseRejectedResult[];
         if (failed.length > 0) {
-            process.stdout.write("\n");
             log(`[FATAL] ${failed.length} packfile(s) failed to download.`);
             for (const f of failed) log(`[ERROR] ${f.reason}`);
-            throw new Error('Packfile download failed');
+
+            // error finish
+            process.exit(1);
+            return;
         }
 
         // provided to git
