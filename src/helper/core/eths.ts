@@ -151,7 +151,7 @@ class Eths {
                 outLines.push(`ok ${ref}\n`);
 
                 if (src !== "") {
-                    const newOid = await getOidFromRef(src);
+                    const newOid = await getOidFromRef(src, this.gitdir);
                     this.refs.set(dst, newOid);
                 } else {
                     this.refs.delete(dst);
@@ -191,12 +191,13 @@ class Eths {
 
     // fetch
     private async fetch(wantRef: string) {
-        const srcRef = await findMatchingLocalBranch(wantRef);
+        const srcRef = await findMatchingLocalBranch(wantRef, this.gitdir);
         const result = await findCommonAncestor(
             this.contractDriver,
             srcRef, // 'refs/heads/main'
             wantRef, // 'refs/heads/master'
-            RPC_CONCURRENCY_LIMIT
+            RPC_CONCURRENCY_LIMIT,
+            this.gitdir
         );
 
         const { missingPacks } = result;
@@ -256,12 +257,12 @@ class Eths {
                 return `error ${dst} no push permission`;
             }
 
-            const newOid = await getOidFromRef(src);
+            const newOid = await getOidFromRef(src, this.gitdir);
             const parentOid = this.refs.get(dst) || null;
 
             // 1. pack file
             log('[INFO] Preparing Git packfiles, this may take a while...');
-            const result = await createCommitBoundaryPacks(newOid, parentOid, this.gitdir);
+            const result = await createCommitBoundaryPacks(src, newOid, parentOid, this.gitdir);
 
             // 2. upload packfiles
             try {
@@ -312,12 +313,13 @@ class Eths {
             }
 
             //  1. find parent oid
-            const newOid = await getOidFromRef(src);
+            const newOid = await getOidFromRef(src, this.gitdir);
             const result = await findCommonAncestor(
                 this.contractDriver,
                 src,
                 dst,
-                RPC_CONCURRENCY_LIMIT
+                RPC_CONCURRENCY_LIMIT,
+                this.gitdir
             );
 
             const commonRecord = result.commonRecord;
@@ -329,11 +331,11 @@ class Eths {
             let parentIndex: number;
             if (commonRecord) {
                 const commonOid = commonRecord.newOid;
-                packFileResult = await createCommitBoundaryPacks(newOid, commonOid, this.gitdir);
+                packFileResult = await createCommitBoundaryPacks(src, newOid, commonOid, this.gitdir);
                 parentIndex = commonIndex;
                 log(`[INFO] Force push: Partial override (Ancestor: ${commonOid}, Index: ${parentIndex})`);
             } else {
-                packFileResult = await createCommitBoundaryPacks(newOid, null, this.gitdir);
+                packFileResult = await createCommitBoundaryPacks(src, newOid, null, this.gitdir);
                 parentIndex = 0;
                 log(`[INFO] Force push: Full override (No common ancestor).`);
             }

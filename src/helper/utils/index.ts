@@ -70,7 +70,13 @@ async function getAllPushRecords(contractDriver: ContractDriver, refName: string
     return allUpdates;
 }
 
-export async function findCommonAncestor(contractDriver: ContractDriver, srcRef: string|null, dstRef: string, rpcLimit: number): Promise<NegotiationResult> {
+export async function findCommonAncestor(
+    contractDriver: ContractDriver,
+    srcRef: string|null,
+    dstRef: string,
+    rpcLimit: number,
+    gitdir: string
+): Promise<NegotiationResult> {
     const totalRecords = await contractDriver.getPushRecordsCount(dstRef);
     if (totalRecords === 0) {
         return DEFAULT_NEGOTIATION_RESULT;
@@ -79,7 +85,7 @@ export async function findCommonAncestor(contractDriver: ContractDriver, srcRef:
     // get local all oid
     let localOids: Set<string>;
     if (srcRef) {
-        localOids = await getLocalCommitOids(srcRef);
+        localOids = await getLocalCommitOids(srcRef, gitdir);
         if (localOids.size === 0) {
             const allRecords = await getAllPushRecords(contractDriver, dstRef, rpcLimit);
             return {

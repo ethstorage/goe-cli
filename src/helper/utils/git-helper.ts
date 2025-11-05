@@ -2,7 +2,6 @@ import { spawn, SpawnOptions } from 'node:child_process';
 import { createReadStream } from 'node:fs';
 import * as path from "path";
 import { v4 as uuidv4 } from "uuid";
-import { join } from "path";
 import fs from "fs/promises";
 import os from "os";
 
@@ -52,27 +51,27 @@ function spawnNoOutput(
   });
 }
 
-async function runCmdCapture(args: string[]): Promise<string> {
-  const buf = await spawnWithOutput(args[0], args.slice(1), { stdio: ['ignore', 'pipe', 'inherit'] });
+async function runCmdCapture(args: string[], gitdir: string): Promise<string> {
+  const buf = await spawnWithOutput(args[0], args.slice(1), { cwd: path.dirname(gitdir), stdio: ['pipe','pipe','inherit'] });
   return buf.toString('utf8');
 }
 
 // --- Git Tool Functions ---
-async function runGitIndexPackFromFile(packFilePath: string, gitDir: string): Promise<void> {
+async function runGitIndexPackFromFile(packFilePath: string, gitdir: string): Promise<void> {
   return spawnNoOutput(
       'git',
       ['index-pack', '--keep', '-v', packFilePath],
-      { cwd: path.dirname(gitDir), stdio: ['ignore', 'ignore', 'inherit'] }
+      { cwd: path.dirname(gitdir), stdio: ['ignore', 'ignore', 'inherit'] }
   );
 }
 
-export async function runGitPackFromFile(packFilePath: string, gitDir: string): Promise<void> {
+export async function runGitPackFromFile(packFilePath: string, gitdir: string): Promise<void> {
   try {
-    await runGitIndexPackFromFile(packFilePath, gitDir);
+    await runGitIndexPackFromFile(packFilePath, gitdir);
   } catch (err) {
     await new Promise<void>((resolve, reject) => {
       const child = spawn('git', ['index-pack', '--fix-thin', '--stdin', '-v'], {
-        cwd: path.dirname(gitDir),
+        cwd: path.dirname(gitdir),
         stdio: ['pipe', 'inherit', 'pipe']
       });
       const stderr: Buffer[] = [];
@@ -88,7 +87,7 @@ export async function runGitPackFromFile(packFilePath: string, gitDir: string): 
   }
 }
 
-export async function getLocalCommitOids(refName: string): Promise<Set<string>> {
+export async function getLocalCommitOids(refName: string, gitdir: string): Promise<Set<string>> {
   try {
     await spawnNoOutput('git', ['show-ref', '--quiet', '--verify', refName]);
   } catch {
@@ -96,7 +95,7 @@ export async function getLocalCommitOids(refName: string): Promise<Set<string>> 
   }
 
   try {
-    const output = await runCmdCapture(['git', 'rev-list', refName]);
+    const output = await runCmdCapture(['git', 'rev-list', refName], gitdir);
     return new Set(output.trim().split('\n').filter(Boolean));
   } catch (err) {
     log(`Warning: 'git rev-list ${refName}' failed: ${err}`);
@@ -104,20 +103,20 @@ export async function getLocalCommitOids(refName: string): Promise<Set<string>> 
   }
 }
 
-export async function getOidFromRef(refName: string): Promise<string> {
+export async function getOidFromRef(refName: string, gitdir: string): Promise<string> {
   const args = ["git", "rev-parse", refName];
-  const output = await runCmdCapture(args);
+  const output = await runCmdCapture(args, gitdir);
   return output.trim();
 }
 
-export async function findMatchingLocalBranch(remoteRef: string): Promise<string | null> {
+export async function findMatchingLocalBranch(remoteRef: string, gitdir: string): Promise<string | null> {
   try {
-    await runCmdCapture(['git', 'rev-parse', '--is-inside-work-tree']);
+    await runCmdCapture(['git', 'rev-parse', '--is-inside-work-tree'], gitdir);
   } catch (err) {
     return null;
   }
   try {
-    const branchConfigs = await runCmdCapture(['git', 'config', '--get-regexp', '^branch\\.']);
+    const branchConfigs = await runCmdCapture(['git', 'config', '--get-regexp', '^branch\\.'], gitdir);
     if (!branchConfigs.trim()) {
       return null;
     }
@@ -146,7 +145,7 @@ export async function findMatchingLocalBranch(remoteRef: string): Promise<string
   const mergeRef = `refs/heads/${branchName}`;
   let configOutput: string;
   try {
-    configOutput = await runCmdCapture(['git', 'config', '--list']);
+    configOutput = await runCmdCapture(['git', 'config', '--list'], gitdir);
   } catch (err) {
     return null;
   }
@@ -165,7 +164,7 @@ export async function findMatchingLocalBranch(remoteRef: string): Promise<string
 
   let currentBranch: string | null = null;
   try {
-    const output = (await runCmdCapture(['git', 'rev-parse', '--abbrev-ref', 'HEAD'])).trim();
+    const output = (await runCmdCapture(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], gitdir)).trim();
     if (output && output !== 'HEAD') {
       currentBranch = output;
     }
@@ -191,18 +190,20 @@ export async function findMatchingLocalBranch(remoteRef: string): Promise<string
 
 
 // =======================Create Packfiles=========================================
-// Helper: run git and collect stdout
-// run git and get string
-async function execGit(args: string[], gitdir: string): Promise<string> {
-  const buf = await spawnWithOutput('git', args, { cwd: path.dirname(gitdir), stdio: ['pipe','pipe','inherit'] });
-  return buf.toString('utf8');
+async function parentExistsOnBranch(parentOid: string, branchRef: string, gitdir: string): Promise<boolean> {
+  try {
+    await spawnNoOutput('git', ['merge-base', '--is-ancestor', parentOid, branchRef], { cwd: path.dirname(gitdir) });
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 
 // Get all commits between parent and newOid
 async function getAllCommits(newOid: string, parentOid: string | null, gitdir: string): Promise<string[]> {
-  const args = ['rev-list', '--topo-order', '--reverse', newOid];
+  const args = ['git', 'rev-list', '--topo-order', '--reverse', newOid];
   if (parentOid) args.push(`^${parentOid}`);
-  const out = await execGit(args, gitdir);
+  const out = await runCmdCapture(args, gitdir);
   return out.trim().split(/\s+/).filter(Boolean);
 }
 
@@ -210,99 +211,23 @@ async function getAllCommits(newOid: string, parentOid: string | null, gitdir: s
 async function createPackForRange(
     endOid: string,
     parentOid: string | null,
-    packDir: string,
     gitdir: string
-): Promise<{ path: string; size: number }> {
-  const prefix = `pack_${uuidv4().replace(/-/g, '')}`;
-  const outputBase = join(packDir, prefix);
-
+): Promise<Buffer> {
   const revs = parentOid ? `${endOid}\n^${parentOid}\n` : `${endOid}\n`;
-  const buf = await spawnWithOutput(
+  return await spawnWithOutput(
       'git',
       ['pack-objects', '--stdout', '--revs', '--thin', '--delta-base-offset', '--quiet'],
       { cwd: path.dirname(gitdir), stdio: ['pipe', 'pipe', 'pipe'] },
       Buffer.from(revs, 'utf8')
   );
-
-  const packPath = `${outputBase}.pack`;
-  await fs.writeFile(packPath, buf);
-  return { path: packPath, size: buf.length };
 }
 
-// Exponential growing: try 1, 2, 4, 8... commits until we exceed limit, then binary search in that range
-async function tryExponentialApproach(
-    commits: string[],
-    parentOid: string | null,
-    maxSizeBytes: number,
-    tempPackDir: string,
-    gitdir: string
-): Promise<{ success: boolean; chunks: PackFileChunk[] }> {
-  const chunks: PackFileChunk[] = [];
-  let currentParent = parentOid;
-  let idx = 0;
-  let consecutiveFailures = 0;
-  const maxFailures = 3; // If we fail too many times, abort this approach
-
-  while (idx < commits.length) {
-    let step = 1;
-    let lastValidEnd = idx;
-    let lastValidPack: { path: string; size: number } | null = null;
-
-    // Exponential growth phase
-    while (idx + step <= commits.length && consecutiveFailures < maxFailures) {
-      const endIdx = idx + step - 1;
-      try {
-        const trialPack = await createPackForRange(commits[endIdx], currentParent, tempPackDir, gitdir);
-
-        if (trialPack.size <= maxSizeBytes) {
-          lastValidEnd = endIdx;
-          lastValidPack = trialPack;
-          step *= 2;
-          consecutiveFailures = 0; // Reset failure counter on success
-        } else {
-          await fs.rm(trialPack.path, { force: true });
-          consecutiveFailures++;
-          break;
-        }
-      } catch (error) {
-        consecutiveFailures++;
-        break;
-      }
-    }
-
-    if (lastValidPack && lastValidEnd >= idx) {
-      // We found a valid range, use it
-      chunks.push({
-        path: lastValidPack.path,
-        size: lastValidPack.size,
-        startOid: currentParent ?? '',
-        endOid: commits[lastValidEnd]
-      });
-
-      currentParent = commits[lastValidEnd];
-      idx = lastValidEnd + 1;
-    } else if (consecutiveFailures >= maxFailures) {
-      // Too many failures, abort exponential approach
-      // Clean up any packs we created
-      for (const chunk of chunks) {
-        await fs.rm(chunk.path, { force: true }).catch(() => {});
-      }
-      return { success: false, chunks };
-    } else {
-      // Single commit approach as fallback
-      const singlePack = await createPackForRange(commits[idx], currentParent, tempPackDir, gitdir);
-      chunks.push({
-        path: singlePack.path,
-        size: singlePack.size,
-        startOid: currentParent ?? '',
-        endOid: commits[idx]
-      });
-      currentParent = commits[idx];
-      idx++;
-    }
-  }
-
-  return { success: true, chunks };
+async function saveFile(packDir: string, buf: Buffer): Promise<string> {
+  const prefix = `pack_${uuidv4().replace(/-/g, '')}`;
+  const outputBase = path.join(packDir, prefix);
+  const packPath = `${outputBase}.pack`;
+  await fs.writeFile(packPath, buf);
+  return packPath;
 }
 
 // Binary search approach for when exponential fails
@@ -313,6 +238,7 @@ async function binarySearchApproach(
     tempPackDir: string,
     gitdir: string
 ): Promise<PackCreationResult> {
+  const MIN_SIZE_THRESHOLD = maxSizeBytes * 0.5;
   const chunks: PackFileChunk[] = [];
   let currentParent = parentOid;
   let idx = 0;
@@ -324,51 +250,50 @@ async function binarySearchApproach(
 
     // Quick check: can we take all remaining?
     try {
-      const fullPack = await createPackForRange(commits[right], currentParent, tempPackDir, gitdir);
-      if (fullPack.size <= maxSizeBytes) {
+      const packBuffer = await createPackForRange(commits[right], currentParent, gitdir);
+      if (packBuffer.length <= maxSizeBytes) {
+        const packfilePath = await saveFile(tempPackDir, packBuffer);
         chunks.push({
-          path: fullPack.path,
-          size: fullPack.size,
+          path: packfilePath,
+          size: packBuffer.length,
           startOid: currentParent ?? '',
           endOid: commits[right]
         });
         break;
       }
-      await fs.rm(fullPack.path, { force: true });
-    } catch (error) {
-      // Continue with binary search
-    }
+    } catch {}
 
     // Binary search for optimal range
     while (left <= right) {
       const mid = Math.floor((left + right) / 2);
       try {
-        const trialPack = await createPackForRange(commits[mid], currentParent, tempPackDir, gitdir);
-
-        if (trialPack.size <= maxSizeBytes) {
+        const packBuffer = await createPackForRange(commits[mid], currentParent, gitdir);
+        if (packBuffer.length <= maxSizeBytes) {
           best = mid;
           left = mid + 1;
-
-          // Early exit if we're close to limit
-          if (trialPack.size > maxSizeBytes * 0.9) {
-            await fs.rm(trialPack.path, { force: true });
-            break;
-          }
-          await fs.rm(trialPack.path, { force: true });
         } else {
           right = mid - 1;
-          await fs.rm(trialPack.path, { force: true });
         }
-      } catch (error) {
+      } catch {
         right = mid - 1;
       }
     }
 
     // Create final pack for the best range found
-    const finalPack = await createPackForRange(commits[best], currentParent, tempPackDir, gitdir);
+    let packBuffer = await createPackForRange(commits[best], currentParent, gitdir);
+    if (packBuffer.length < MIN_SIZE_THRESHOLD && best + 1 < commits.length) {
+      const nextBestIndex = best + 1;
+      const nextEndOid = commits[nextBestIndex];
+      try {
+        packBuffer = await createPackForRange(nextEndOid, currentParent, gitdir);
+        best = nextBestIndex;
+      } catch {}
+    }
+
+    const packfilePath = await saveFile(tempPackDir, packBuffer);
     chunks.push({
-      path: finalPack.path,
-      size: finalPack.size,
+      path: packfilePath,
+      size: packBuffer.length,
       startOid: currentParent ?? '',
       endOid: commits[best]
     });
@@ -382,47 +307,42 @@ async function binarySearchApproach(
 
 // Adaptive algorithm that starts fast and gets smarter as needed
 export async function createCommitBoundaryPacks(
+    branchRef: string,
     newOid: string,
     parentOid: string | null,
     gitdir: string,
-    maxSizeBytes: number = 15 * 1024 * 1024
+    maxSizeBytes: number = 10 * 1024 * 1024
 ): Promise<PackCreationResult> {
-  const chunks: PackFileChunk[] = [];
   const tempPackDir = path.join(os.tmpdir(), `eths-adaptive-${uuidv4().substring(0, 8)}`);
   await fs.mkdir(tempPackDir, { recursive: true });
 
   try {
-    const commits = await getAllCommits(newOid, parentOid, gitdir);
-    if (commits.length === 0) {
-      return { chunks: [], tempDir: tempPackDir };
+    let validParent = parentOid;
+    if (parentOid && !(await parentExistsOnBranch(parentOid, branchRef, gitdir))) {
+      log(`[warn] parentOid ${parentOid} not found locally, ignoring`);
+      validParent = null;
     }
+
+    const commits = await getAllCommits(newOid, validParent, gitdir);
+    if (!commits.length) return { chunks: [], tempDir: tempPackDir };
 
     // Phase 1: Quick assessment - try to pack everything first
     if (commits.length <= 10) {
       // For very small number of commits, just pack everything
-      const fullPack = await createPackForRange(commits[commits.length - 1], parentOid, tempPackDir, gitdir);
-      if (fullPack.size <= maxSizeBytes) {
-        chunks.push({
-          path: fullPack.path,
-          size: fullPack.size,
-          startOid: parentOid ?? '',
-          endOid: commits[commits.length - 1]
-        });
-        return { chunks, tempDir: tempPackDir };
+      const packBuffer = await createPackForRange(commits[commits.length - 1], validParent, gitdir);
+      if (packBuffer.length <= maxSizeBytes) {
+        const packfilePath = await saveFile(tempPackDir, packBuffer);
+        return {
+          chunks: [{ path: packfilePath, size: packBuffer.length, startOid: validParent ?? "", endOid: commits[commits.length - 1] }],
+          tempDir: tempPackDir,
+        };
       }
     }
 
-    // Phase 2: Try exponential growing approach first (fast for small-to-medium repos)
-    let result = await tryExponentialApproach(commits, parentOid, maxSizeBytes, tempPackDir, gitdir);
-    if (result.success) {
-      return { chunks: result.chunks, tempDir: tempPackDir };
-    }
-
     // Phase 3: Fall back to binary search for large/complex repos
-    console.log(`Exponential approach failed, falling back to binary search`);
-    return await binarySearchApproach(commits, parentOid, maxSizeBytes, tempPackDir, gitdir);
-  } catch (error) {
+    return await binarySearchApproach(commits, validParent, maxSizeBytes, tempPackDir, gitdir);
+  } catch (err) {
     await fs.rm(tempPackDir, { recursive: true, force: true }).catch(() => {});
-    throw error;
+    throw err;
   }
 }
