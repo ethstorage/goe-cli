@@ -5,7 +5,6 @@ import { v4 as uuidv4 } from "uuid";
 import { join } from "path";
 import fs from "fs/promises";
 import os from "os";
-import pLimit from "p-limit";
 
 import { PackCreationResult, PackFileChunk } from "../types/index.js";
 import { log } from "./log.js";
@@ -28,7 +27,7 @@ function spawnWithOutput(
       else reject(new Error(`Command "${command} ${args.join(' ')}" exited ${code ?? signal}`));
     });
 
-    if (child.stdin) child.stdin.end(input);
+    if (child.stdin && input) child.stdin.end(input);
   });
 }
 
@@ -207,48 +206,6 @@ async function getAllCommits(newOid: string, parentOid: string | null, gitdir: s
   return out.trim().split(/\s+/).filter(Boolean);
 }
 
-// Estimate commit sizes
-async function estimateCommitSizes(parentOid: string | null, commits: string[], gitdir: string, defaultBytes = 50): Promise<number[]> {
-  if (commits.length === 0) return [];
-  let range: string;
-  if (commits.length === 1) {
-    range = commits[0];
-  } else {
-    const first = commits[0];
-    range = parentOid ? `${first}^..${commits[commits.length - 1]}` : `${first}..${commits[commits.length - 1]}`;
-  }
-
-  let out: string;
-  try {
-    out = await execGit(['log', '--format=%H', '--no-renames', '--numstat', range], gitdir);
-  } catch {
-    return commits.map(() => 1024);
-  }
-
-  const lines = out.split('\n');
-  const map = new Map<string, number>();
-  let currentHash: string | null = null;
-
-  for (const line of lines) {
-    if (!line) continue;
-    if (/^[0-9a-f]{7,40}$/.test(line)) {
-      currentHash = line.trim();
-      map.set(currentHash, 0);
-    } else {
-      const parts = line.split('\t');
-      if (parts.length >= 3 && currentHash) {
-        const added = parts[0] === '-' ? 0 : parseInt(parts[0], 10) || 0;
-        const deleted = parts[1] === '-' ? 0 : parseInt(parts[1], 10) || 0;
-        const linesChanged = added + deleted;
-        const prev = map.get(currentHash) || 0;
-        map.set(currentHash, prev + linesChanged * defaultBytes);
-      }
-    }
-  }
-
-  return commits.map(c => map.get(c) ?? Math.max(1024, defaultBytes * 2));
-}
-
 // Create pack for given commit range
 async function createPackForRange(
     endOid: string,
@@ -272,6 +229,158 @@ async function createPackForRange(
   return { path: packPath, size: buf.length };
 }
 
+// Exponential growing: try 1, 2, 4, 8... commits until we exceed limit, then binary search in that range
+async function tryExponentialApproach(
+    commits: string[],
+    parentOid: string | null,
+    maxSizeBytes: number,
+    tempPackDir: string,
+    gitdir: string
+): Promise<{ success: boolean; chunks: PackFileChunk[] }> {
+  const chunks: PackFileChunk[] = [];
+  let currentParent = parentOid;
+  let idx = 0;
+  let consecutiveFailures = 0;
+  const maxFailures = 3; // If we fail too many times, abort this approach
+
+  while (idx < commits.length) {
+    let step = 1;
+    let lastValidEnd = idx;
+    let lastValidPack: { path: string; size: number } | null = null;
+
+    // Exponential growth phase
+    while (idx + step <= commits.length && consecutiveFailures < maxFailures) {
+      const endIdx = idx + step - 1;
+      try {
+        const trialPack = await createPackForRange(commits[endIdx], currentParent, tempPackDir, gitdir);
+
+        if (trialPack.size <= maxSizeBytes) {
+          lastValidEnd = endIdx;
+          lastValidPack = trialPack;
+          step *= 2;
+          consecutiveFailures = 0; // Reset failure counter on success
+        } else {
+          await fs.rm(trialPack.path, { force: true });
+          consecutiveFailures++;
+          break;
+        }
+      } catch (error) {
+        consecutiveFailures++;
+        break;
+      }
+    }
+
+    if (lastValidPack && lastValidEnd >= idx) {
+      // We found a valid range, use it
+      chunks.push({
+        path: lastValidPack.path,
+        size: lastValidPack.size,
+        startOid: currentParent ?? '',
+        endOid: commits[lastValidEnd]
+      });
+
+      currentParent = commits[lastValidEnd];
+      idx = lastValidEnd + 1;
+    } else if (consecutiveFailures >= maxFailures) {
+      // Too many failures, abort exponential approach
+      // Clean up any packs we created
+      for (const chunk of chunks) {
+        await fs.rm(chunk.path, { force: true }).catch(() => {});
+      }
+      return { success: false, chunks };
+    } else {
+      // Single commit approach as fallback
+      const singlePack = await createPackForRange(commits[idx], currentParent, tempPackDir, gitdir);
+      chunks.push({
+        path: singlePack.path,
+        size: singlePack.size,
+        startOid: currentParent ?? '',
+        endOid: commits[idx]
+      });
+      currentParent = commits[idx];
+      idx++;
+    }
+  }
+
+  return { success: true, chunks };
+}
+
+// Binary search approach for when exponential fails
+async function binarySearchApproach(
+    commits: string[],
+    parentOid: string | null,
+    maxSizeBytes: number,
+    tempPackDir: string,
+    gitdir: string
+): Promise<PackCreationResult> {
+  const chunks: PackFileChunk[] = [];
+  let currentParent = parentOid;
+  let idx = 0;
+
+  while (idx < commits.length) {
+    let left = idx;
+    let right = commits.length - 1;
+    let best = idx;
+
+    // Quick check: can we take all remaining?
+    try {
+      const fullPack = await createPackForRange(commits[right], currentParent, tempPackDir, gitdir);
+      if (fullPack.size <= maxSizeBytes) {
+        chunks.push({
+          path: fullPack.path,
+          size: fullPack.size,
+          startOid: currentParent ?? '',
+          endOid: commits[right]
+        });
+        break;
+      }
+      await fs.rm(fullPack.path, { force: true });
+    } catch (error) {
+      // Continue with binary search
+    }
+
+    // Binary search for optimal range
+    while (left <= right) {
+      const mid = Math.floor((left + right) / 2);
+      try {
+        const trialPack = await createPackForRange(commits[mid], currentParent, tempPackDir, gitdir);
+
+        if (trialPack.size <= maxSizeBytes) {
+          best = mid;
+          left = mid + 1;
+
+          // Early exit if we're close to limit
+          if (trialPack.size > maxSizeBytes * 0.9) {
+            await fs.rm(trialPack.path, { force: true });
+            break;
+          }
+          await fs.rm(trialPack.path, { force: true });
+        } else {
+          right = mid - 1;
+          await fs.rm(trialPack.path, { force: true });
+        }
+      } catch (error) {
+        right = mid - 1;
+      }
+    }
+
+    // Create final pack for the best range found
+    const finalPack = await createPackForRange(commits[best], currentParent, tempPackDir, gitdir);
+    chunks.push({
+      path: finalPack.path,
+      size: finalPack.size,
+      startOid: currentParent ?? '',
+      endOid: commits[best]
+    });
+
+    currentParent = commits[best];
+    idx = best + 1;
+  }
+
+  return { chunks, tempDir: tempPackDir };
+}
+
+// Adaptive algorithm that starts fast and gets smarter as needed
 export async function createCommitBoundaryPacks(
     newOid: string,
     parentOid: string | null,
@@ -279,110 +388,41 @@ export async function createCommitBoundaryPacks(
     maxSizeBytes: number = 15 * 1024 * 1024
 ): Promise<PackCreationResult> {
   const chunks: PackFileChunk[] = [];
-  const tempPackDir = join(os.tmpdir(), `eths-packs-${uuidv4().substring(0, 8)}`);
+  const tempPackDir = path.join(os.tmpdir(), `eths-adaptive-${uuidv4().substring(0, 8)}`);
   await fs.mkdir(tempPackDir, { recursive: true });
-
-  const concurrency = Math.min(os.cpus().length, 4);
-  const limit = pLimit(concurrency);
 
   try {
     const commits = await getAllCommits(newOid, parentOid, gitdir);
-    if (commits.length === 0) return {chunks: [], tempDir: ""};
-
-    let estimates = await estimateCommitSizes(parentOid, commits, gitdir);
-    let correctionFactor = 0.2;
-    const emaAlpha = 0.25;
-
-    const prefixSum = new Array(estimates.length + 1);
-    prefixSum[0] = 0;
-    for (let i = 0; i < estimates.length; i++) prefixSum[i + 1] = prefixSum[i] + estimates[i];
-    const rangeSum = (i: number, j: number) => prefixSum[j + 1] - prefixSum[i];
-
-    let idx = 0;
-    let currentParent = parentOid;
-
-    while (idx < commits.length) {
-      let cumulative = 0;
-      let candidate = idx;
-      const safety = 1.4;
-      while (candidate < commits.length) {
-        cumulative += estimates[candidate];
-        if (cumulative * correctionFactor > maxSizeBytes * safety) break;
-        candidate++;
-      }
-      candidate = candidate === idx ? idx : candidate - 1;
-
-      let left = idx;
-      let right = Math.min(candidate, commits.length - 1);
-      let best = idx;
-      let lastPackResult: { path: string; size: number } | null = null;
-      const tempPacksToClean: Array<{ pack: string }> = [];
-
-      while (left <= right) {
-        const mid = Math.floor((left + right) / 2);
-        const trialOid = commits[mid];
-        const trialPackPromise = limit(() => createPackForRange(trialOid, currentParent, tempPackDir, gitdir));
-
-        try {
-          const trialPack = await trialPackPromise;
-          tempPacksToClean.push({ pack: trialPack.path });
-          if (trialPack.size <= maxSizeBytes) {
-            best = mid;
-            lastPackResult = trialPack;
-            left = mid + 1;
-          } else {
-            right = mid - 1;
-          }
-        } catch {
-          right = mid - 1;
-        }
-      }
-
-      if (!lastPackResult || best < idx) {
-        await Promise.all(tempPacksToClean.map(p =>
-            Promise.all([fs.rm(p.pack, { force: true })])
-        ));
-        lastPackResult = await createPackForRange(commits[idx], currentParent, tempPackDir, gitdir);
-        best = idx;
-      }
-
-      if (lastPackResult && lastPackResult.size > maxSizeBytes) {
-        await Promise.all(tempPacksToClean.map(p =>
-            Promise.all([fs.rm(p.pack, { force: true })])
-        ));
-        await fs.rm(lastPackResult.path, { force: true });
-        lastPackResult = await createPackForRange(commits[best], currentParent, tempPackDir, gitdir);
-      } else if (lastPackResult) {
-        await Promise.all(tempPacksToClean.map(p =>
-            Promise.all([fs.rm(p.pack, { force: true })])
-        ));
-        const recreatedPack = await createPackForRange(commits[best], currentParent, tempPackDir, gitdir);
-        await fs.rm(lastPackResult.path, { force: true });
-        lastPackResult = recreatedPack;
-      }
-
-      const finalPack = lastPackResult!;
-      chunks.push({
-        path: finalPack.path,
-        size: finalPack.size,
-        startOid: currentParent ?? '',
-        endOid: commits[best]
-      });
-
-      const estSum = rangeSum(idx, best);
-      if (estSum > 0) {
-        const observedRatio = finalPack.size / estSum;
-        if (Number.isFinite(observedRatio) && observedRatio > 0) {
-          correctionFactor = emaAlpha * observedRatio + (1 - emaAlpha) * correctionFactor;
-        }
-      }
-
-      currentParent = commits[best];
-      idx = best + 1;
+    if (commits.length === 0) {
+      return { chunks: [], tempDir: tempPackDir };
     }
-    return { chunks: chunks, tempDir: tempPackDir };
-  } catch (err) {
-    await fs.rm(tempPackDir, { recursive: true, force: true });
-    throw err;
+
+    // Phase 1: Quick assessment - try to pack everything first
+    if (commits.length <= 10) {
+      // For very small number of commits, just pack everything
+      const fullPack = await createPackForRange(commits[commits.length - 1], parentOid, tempPackDir, gitdir);
+      if (fullPack.size <= maxSizeBytes) {
+        chunks.push({
+          path: fullPack.path,
+          size: fullPack.size,
+          startOid: parentOid ?? '',
+          endOid: commits[commits.length - 1]
+        });
+        return { chunks, tempDir: tempPackDir };
+      }
+    }
+
+    // Phase 2: Try exponential growing approach first (fast for small-to-medium repos)
+    let result = await tryExponentialApproach(commits, parentOid, maxSizeBytes, tempPackDir, gitdir);
+    if (result.success) {
+      return { chunks: result.chunks, tempDir: tempPackDir };
+    }
+
+    // Phase 3: Fall back to binary search for large/complex repos
+    console.log(`Exponential approach failed, falling back to binary search`);
+    return await binarySearchApproach(commits, parentOid, maxSizeBytes, tempPackDir, gitdir);
+  } catch (error) {
+    await fs.rm(tempPackDir, { recursive: true, force: true }).catch(() => {});
+    throw error;
   }
 }
