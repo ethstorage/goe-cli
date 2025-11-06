@@ -33,7 +33,7 @@
     "commander": "^14.0.2",
     "dotenv": "^17.2.3",
     "ethers": "^6.12.0",
-    "ethstorage-sdk": "^4.1.4",
+    "ethstorage-sdk": "^4.1.5",
     "keytar": "^7.9.0",
     "p-limit": "^7.2.0",
     "readline-sync": "^1.4.10",

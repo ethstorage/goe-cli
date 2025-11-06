@@ -262,7 +262,13 @@ class Eths {
 
             // 1. pack file
             log('[INFO] Preparing Git packfiles, this may take a while...');
-            const result = await createCommitBoundaryPacks(src, newOid, parentOid, this.gitdir);
+            let result: PackCreationResult;
+            try {
+                result = await createCommitBoundaryPacks(src, newOid, parentOid, this.gitdir);
+            } catch (err: any) {
+                return `error ${dst} create packfile fail`;
+            }
+
 
             // 2. upload packfiles
             try {
@@ -329,15 +335,19 @@ class Eths {
             log('[INFO] Preparing Git packfiles, this may take a while...');
             let packFileResult: PackCreationResult;
             let parentIndex: number;
-            if (commonRecord) {
-                const commonOid = commonRecord.newOid;
-                packFileResult = await createCommitBoundaryPacks(src, newOid, commonOid, this.gitdir);
-                parentIndex = commonIndex;
-                log(`[INFO] Force push: Partial override (Ancestor: ${commonOid}, Index: ${parentIndex})`);
-            } else {
-                packFileResult = await createCommitBoundaryPacks(src, newOid, null, this.gitdir);
-                parentIndex = 0;
-                log(`[INFO] Force push: Full override (No common ancestor).`);
+            try {
+                if (commonRecord) {
+                    const commonOid = commonRecord.newOid;
+                    packFileResult = await createCommitBoundaryPacks(src, newOid, commonOid, this.gitdir);
+                    parentIndex = commonIndex;
+                    log(`[INFO] Force push: Partial override (Ancestor: ${commonOid}, Index: ${parentIndex})`);
+                } else {
+                    packFileResult = await createCommitBoundaryPacks(src, newOid, null, this.gitdir);
+                    parentIndex = 0;
+                    log(`[INFO] Force push: Full override (No common ancestor).`);
+                }
+            } catch (err: any) {
+                return `error ${dst} create packfile fail`;
             }
 
             // 3. upload Pack file
