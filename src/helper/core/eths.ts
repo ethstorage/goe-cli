@@ -25,7 +25,7 @@ import { getWallet } from "../../core/wallet/index.js";
 
 const ZERO_OID = "0000000000000000000000000000000000000000";
 const RPC_CONCURRENCY_LIMIT = 8;
-const DOWNLOAD_CONCURRENCY_LIMIT = 15;
+const DOWNLOAD_CONCURRENCY_LIMIT = 3;
 
 class Eths {
     gitdir: string
@@ -191,6 +191,7 @@ class Eths {
 
     // fetch
     private async fetch(wantRef: string) {
+        log('[INFO] Starting negotiation with remote for missing packfiles...');
         const srcRef = await findMatchingLocalBranch(wantRef, this.gitdir);
         const result = await findCommonAncestor(
             this.contractDriver,
@@ -217,6 +218,8 @@ class Eths {
     }
 
     private async sendPackfiles(updates: PushRecord[]) {
+        const start = Date.now();
+
         const packDir = join(this.gitdir, "objects", "pack");
         if (!existsSync(packDir)) mkdirSync(packDir, { recursive: true });
 
@@ -243,6 +246,8 @@ class Eths {
             return;
         }
 
+        const end = Date.now();
+        console.error(`耗时: ${end - start}ms`);
         // provided to git
         for (const { value: packFilePath } of success) {
             await runGitPackFromFile(packFilePath, this.gitdir);

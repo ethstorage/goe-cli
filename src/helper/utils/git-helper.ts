@@ -116,6 +116,11 @@ async function gitRunNoOutput(args: string[], gitdir: string): Promise<void> {
   await spawnNoOutput('git', args, { cwd });
 }
 
+async function gitRunNoOutputIgnore(args: string[], gitdir: string): Promise<void> {
+  const cwd = getCwd(gitdir);
+  await spawnNoOutput('git', args, { cwd, stdio: ['pipe', 'ignore', 'ignore'] });
+}
+
 // --- 3. Git Tool Functions (Using Core Wrappers) ---
 
 /**
@@ -128,13 +133,13 @@ export async function runGitPackFromFile(packFilePath: string, gitdir: string): 
   const cwd = getCwd(gitdir);
   try {
     // Attempt standard index-pack with --keep
-    await gitRunNoOutput(
-        ['index-pack', '--keep', '-v', packFilePath],
+    await gitRunNoOutputIgnore(
+        ['index-pack', '--keep', packFilePath],
         gitdir
     );
   } catch (err: any) {
     await new Promise<void>((resolve, reject) => {
-      const child = spawn('git', ['index-pack', '--fix-thin', '--stdin', '-v'], { cwd, stdio: ['pipe', 'inherit', 'pipe'] });
+      const child = spawn('git', ['index-pack', '--fix-thin', '--stdin', '-v'], { cwd, stdio: ['pipe', 'ignore', 'pipe'] });
       const stderr: Buffer[] = [];
       if (child.stderr) child.stderr.on('data', d => stderr.push(d));
       child.on('error', reject);
@@ -229,8 +234,12 @@ export async function findMatchingLocalBranch(remoteRef: string, gitdir: string)
 
   const branchConfig: Record<string, { remote?: string; merge?: string }> = {};
   for (const line of configOutput.split('\n')) {
-    const [key, val] = line.split('=');
-    if (!key || !val) continue;
+    const equalsIndex = line.indexOf('=');
+    if (equalsIndex === -1) continue;
+
+    const key = line.substring(0, equalsIndex);
+    const val = line.substring(equalsIndex + 1);
+
     const match = key.match(/^branch\.(.+?)\.(remote|merge)$/);
     if (match) {
       const [, branch, prop] = match;

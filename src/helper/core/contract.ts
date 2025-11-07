@@ -1,6 +1,5 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { finished } from 'node:stream/promises';
 import { ethers } from 'ethers';
 import { UploadType, FlatDirectory } from "ethstorage-sdk";
 import { NodeFile } from "ethstorage-sdk/file";
@@ -189,10 +188,11 @@ export class ContractDriver {
         if (start > end) return;
 
         currentSuccessIndex = progress;
+        const percent = ((progress / total) * 100).toFixed(1);
         if (isChange) {
-          log(`[PROGRESS] pack file ${dst}: Uploaded chunks ${start}-${end}`);
+          log(`[PROGRESS] packfile ${dst}: Uploaded chunks ${start}-${end} / ${total} (${percent}%)`);
         } else {
-          log(`[PROGRESS] pack file ${dst}: Chunks ${start}-${end} skipped (no change)`);
+          log(`[PROGRESS] packfile ${dst}: Chunks ${start}-${end} skipped (no change) / ${total} (${percent}%)`);
         }
       },
       onFail: (err: Error) => {
@@ -222,7 +222,7 @@ export class ContractDriver {
   }
 
   async downloadPackFile(fileName: string, filePath: string): Promise<string> {
-    await fs.promises.mkdir(path.dirname(filePath), {recursive: true});
+    await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
     const handle = await fs.promises.open(filePath, "w");
     const writePromises: Promise<any>[] = [];
 
@@ -230,33 +230,43 @@ export class ContractDriver {
     let currentOffset = 0;
     let finishedChunks = 0;
     let lastLogTime = Date.now();
+    let finished = false;
 
     try {
       await new Promise<void>((resolve, reject) => {
         this.flatDirectory.download(fileName, {
-          onProgress: (progress: number, count: number, chunk: Uint8Array) => {
+          onProgress: (currentChunk: number, totalChunks: number, chunkData: Uint8Array) => {
             const writeOffset = currentOffset;
-            currentOffset += chunk.length;
-            totalSize += chunk.length;
+            currentOffset += chunkData.length;
+            totalSize += chunkData.length;
 
-            const p = handle.write(chunk, 0, chunk.length, writeOffset)
+            const p = handle.write(chunkData, 0, chunkData.length, writeOffset)
                 .then(() => {
                   finishedChunks++;
                   const now = Date.now();
-                  if (now - lastLogTime > 1000 || finishedChunks === count) {
-                    const percent = ((finishedChunks / count) * 100).toFixed(2);
-                    log(`[${new Date().toLocaleTimeString()}] Download ${fileName}: ${percent}% (${finishedChunks}/${count})`);
+                  if (now - lastLogTime > 1000 || finishedChunks === totalChunks) {
+                    const percent = ((finishedChunks / totalChunks) * 100).toFixed(2);
+                    log(`[${new Date().toLocaleTimeString()}] Download ${fileName}: ${percent}% (${finishedChunks}/${totalChunks})`);
                     lastLogTime = now;
                   }
                 })
                 .catch(err => {
-                  reject(err);
-                  throw err;
+                  if (!finished) {
+                    finished = true;
+                    reject(err);
+                  }
                 });
             writePromises.push(p);
           },
-          onFail: (err: Error) => reject(err),
+          onFail: (err: Error) => {
+            if (!finished) {
+              finished = true;
+              reject(err);
+            }
+          },
           onFinish: async () => {
+            if (finished) return;
+            finished = true;
             await Promise.all(writePromises);
             await handle.close();
             log(`[INFO] Download finished for ${fileName}. Total size: ${totalSize} bytes.`);
@@ -267,12 +277,8 @@ export class ContractDriver {
 
       return filePath;
     } catch (err) {
-      try {
-        await handle.close();
-      } catch {}
-      try {
-        await fs.promises.unlink(filePath);
-      } catch {}
+      try { await handle.close(); } catch {}
+      try { await fs.promises.unlink(filePath); } catch {}
       throw err;
     }
   }
