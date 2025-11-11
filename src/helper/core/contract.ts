@@ -213,6 +213,8 @@ export class ContractDriver {
       content: file,
       chunkHashes: hashes,
       type: UploadType.Blob,
+      gasIncPct: 1,
+      isConfirmedNonce: true,
       callback: uploadCallback
     };
 

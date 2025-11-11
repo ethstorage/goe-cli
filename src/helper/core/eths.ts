@@ -218,8 +218,6 @@ class Eths {
     }
 
     private async sendPackfiles(updates: PushRecord[]) {
-        const start = Date.now();
-
         const packDir = join(this.gitdir, "objects", "pack");
         if (!existsSync(packDir)) mkdirSync(packDir, { recursive: true });
 
@@ -246,8 +244,6 @@ class Eths {
             return;
         }
 
-        const end = Date.now();
-        console.error(`耗时: ${end - start}ms`);
         // provided to git
         for (const { value: packFilePath } of success) {
             await runGitPackFromFile(packFilePath, this.gitdir);
