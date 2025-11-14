@@ -1,10 +1,10 @@
 import * as path from 'path';
 
 import { Api } from '../types/index.js';
-import { parseEthsURI } from "../utils/index.js";
-import Eths from "./eths.js";
+import { parseGoeURI } from "../utils/index.js";
+import Goe from "./goe.js";
 
-let eths: Eths;
+let goe: Goe;
 
 export async function createImpl(env: NodeJS.ProcessEnv): Promise<Api> {
   // init sdk
@@ -14,23 +14,23 @@ export async function createImpl(env: NodeJS.ProcessEnv): Promise<Api> {
   }
   const gitdir  = path.resolve(gitDirCandidate);
   const [, , , remoteUrl] = process.argv
-  const protocol = await parseEthsURI(remoteUrl);
+  const protocol = await parseGoeURI(remoteUrl);
 
-  eths = await Eths.create(gitdir, protocol);
+  goe = await Goe.create(gitdir, protocol);
 
 
   return {
     list: async (forPush) => {
-      return await eths.doList(forPush);
+      return await goe.doList(forPush);
     },
     handlePush: async (refs) => {
-      return await eths.doPush(refs);
+      return await goe.doPush(refs);
     },
     handleFetch: async (p) => {
-      return await eths.doFetch(p);
+      return await goe.doFetch(p);
     },
     close: async () => {
-      await eths.close();
+      await goe.close();
     }
   };
 }

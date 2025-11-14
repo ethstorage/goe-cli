@@ -1,5 +1,5 @@
 
-export const ETHSFactoryAbi = [
+export const GOEFactoryAbi = [
     "event RepoCreated(address indexed repo, address indexed creator, bytes repoName)",
     "function createRepo(bytes repoName) external returns (address)",
     "function getUserRepoCount(address user) external view returns (uint256)",
@@ -7,7 +7,7 @@ export const ETHSFactoryAbi = [
 ];
 
 
-export const ETHSRepoAbi = [
+export const GOERepoAbi = [
     "function addPusher(address account) external",
     "function removePusher(address account) external",
     "function addMaintainer(address account) external",

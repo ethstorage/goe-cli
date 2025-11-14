@@ -3,22 +3,22 @@ import pLimit from "p-limit";
 import { ethers } from "ethers";
 
 import { Networks } from "../../core/config/index.js"
-import { EthsProtocol, NegotiationResult, PushRecord } from "../types/index.js";
+import { GOEProtocol, NegotiationResult, PushRecord } from "../types/index.js";
 import { getLocalCommitOids } from "./git-helper.js";
 import { ContractDriver } from "../core/contract.js";
 
 export * from './log.js';
 export * from './git-helper.js';
 
-export async function parseEthsURI(uri: string): Promise<EthsProtocol> {
+export async function parseGoeURI(uri: string): Promise<GOEProtocol> {
     const url = new URLParse(uri)
     let hostname = url.hostname
     if (!hostname || !ethers.isAddress(hostname)) {
-        throw new Error("invalid eths uri, no contract address")
+        throw new Error("invalid goe uri, no contract address")
     }
 
     let chainId = url.port ? parseInt(url.port) : null
-    if (!chainId) throw new Error("invalid eths uri, no chainId")
+    if (!chainId) throw new Error("invalid goe uri, no chainId")
 
     let netConfig = Networks[chainId]
     if (!netConfig) throw new Error(`Not Support chainId: ${chainId}`)

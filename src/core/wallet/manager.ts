@@ -44,13 +44,13 @@ export async function lockWallet(address: string): Promise<void> {
 export async function getWallet(): Promise<DecryptedWallet> {
     const addresses = listWalletAddresses();
     if (addresses.length < 1) {
-        throw new Error(`Wallet not found. Please run 'eths wallet create' to create it.`);
+        throw new Error(`Wallet not found. Please run 'goe wallet create' to create it.`);
     }
 
     const address = addresses[0];
     const decryptionKey = await getDecryptionKey(address);
     if (!decryptionKey) {
-        throw new Error(`Wallet ${address} is locked. Run 'eths wallet unlock'`);
+        throw new Error(`Wallet ${address} is locked. Run 'goe wallet unlock'`);
     }
     const encryptedWallet = loadEncryptedWallet(address);
     const privateKey = decrypt(

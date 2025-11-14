@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import GitRemoteHelper from './core/git-protocol.js';
-import { createImpl } from './core/eth-api.js';
+import { createImpl } from './core/goe-api.js';
 import { log } from './utils/log.js';
 
 async function main() {

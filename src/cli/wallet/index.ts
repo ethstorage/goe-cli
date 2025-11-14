@@ -51,7 +51,7 @@ walletCmd
         try {
             const address = getFirstWalletAddress();
             if (!address) {
-                return logger.error("Wallet not found. Run 'eths wallet create' to create one.");
+                return logger.error("Wallet not found. Run 'goe wallet create' to create one.");
             }
 
             const password = promptPassword('Enter wallet password: ');
@@ -71,7 +71,7 @@ walletCmd
         try {
             const address = getFirstWalletAddress();
             if (!address) {
-                return logger.error("Wallet not found. Run 'eths wallet create' to create one.");
+                return logger.error("Wallet not found. Run 'goe wallet create' to create one.");
             }
 
             await lockWallet(address);
@@ -89,7 +89,7 @@ walletCmd
     .action(() => {
         const addresses = listWalletAddresses();
         if (addresses.length === 0) {
-            return logger.info('No wallets found. Create one with `eths wallet create`');
+            return logger.info('No wallets found. Create one with `goe wallet create`');
         }
         logger.info('Wallets:');
         addresses.forEach(addr => logger.info(`- ${addr}`));
@@ -117,7 +117,7 @@ ${whiteBold('🔑 Private Key (SAVE IMMEDIATELY!):')}
   ${styledPrivateKey}
 
 ${gold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}
-${gold('📜  ETHS Wallet Usage Policy')}
+${gold('📜  GOE Wallet Usage Policy')}
 ${gold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}
 
 ${gold('1️⃣  FUND GAS FIRST')}
@@ -125,7 +125,7 @@ ${gold('1️⃣  FUND GAS FIRST')}
     to this wallet before performing any operations.
 
 ${gold('2️⃣  LIMITED PURPOSE WALLET')}
-  • This wallet is ${redBold('STRICTLY for ETHS protocol data uploads')}  
+  • This wallet is ${redBold('STRICTLY for GOE protocol data uploads')}  
     and contract interactions.
   • ${redBold('DO NOT')} store or transfer large funds here.
 

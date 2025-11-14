@@ -1,6 +1,6 @@
 import { ethers, Contract } from "ethers";
 import { getWallet } from "../../core/wallet/index.js";
-import { ETHSFactoryAbi, ETHSRepoAbi, Networks } from "../../core/config/index.js"
+import { GOEFactoryAbi, GOERepoAbi, Networks } from "../../core/config/index.js"
 
 export interface RepoInfo {
     address: string;
@@ -51,7 +51,7 @@ function validateAddress(address: string, label = "address") {
 async function getRepoContract(repoAddress: string, chainId: number) {
     validateAddress(repoAddress, "repoAddress");
     const signer = await getSigner(chainId);
-    return new Contract(repoAddress, ETHSRepoAbi, signer);
+    return new Contract(repoAddress, GOERepoAbi, signer);
 }
 
 /**
@@ -64,11 +64,11 @@ export namespace Factory {
         const signer = await getSigner(chainId);
         const { hubAddress } = getNetworkConfig(chainId);
 
-        const factory = new Contract(hubAddress, ETHSFactoryAbi, signer);
+        const factory = new Contract(hubAddress, GOEFactoryAbi, signer);
         const tx = await factory.createRepo(ethers.toUtf8Bytes(repoName));
         const receipt = await waitForTx(tx, "createRepo");
 
-        const iface = new ethers.Interface(ETHSFactoryAbi);
+        const iface = new ethers.Interface(GOEFactoryAbi);
         for (const log of receipt.logs) {
             try {
                 const parsed = iface.parseLog(log);
@@ -89,7 +89,7 @@ export namespace Factory {
         const { hubAddress } = getNetworkConfig(chainId);
 
         const userAddress = await signer.getAddress();
-        const factory = new Contract(hubAddress, ETHSFactoryAbi, signer);
+        const factory = new Contract(hubAddress, GOEFactoryAbi, signer);
         const repos = await factory.getUserReposPaginated(userAddress, start, limit);
         return repos.map((r: any) => ({
             address: r.repoAddress,

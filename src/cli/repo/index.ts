@@ -27,7 +27,7 @@ repoCmd
             logger.info(`Creating repository "${name}" on chain ${chainId}...`);
             const repoAddress = await Factory.createRepo(name, chainId);
             logger.success(`Repository created successfully: ${repoAddress}`);
-            logger.normal(`🔗 Access via: eths://${repoAddress}:${chainId}`);
+            logger.normal(`🔗 Access via: goe://${repoAddress}:${chainId}`);
         } catch (e: any) {
             logger.error(`Failed to create repository: ${e.message}`);
         }

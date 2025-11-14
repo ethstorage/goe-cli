@@ -3,7 +3,7 @@ import { homedir } from 'os';
 import { join } from 'path';
 import { EncryptedWalletFile } from '../types/wallet.js';
 
-const WALLET_ROOT = join(homedir(), '.eths', 'wallets');
+const WALLET_ROOT = join(homedir(), '.goe', 'wallets');
 
 function ensureWalletDir(): void {
     if (!existsSync(WALLET_ROOT)) {
@@ -20,7 +20,7 @@ export function saveEncryptedWallet(wallet: EncryptedWalletFile): void {
 export function loadEncryptedWallet(address: string): EncryptedWalletFile {
     const filePath = join(WALLET_ROOT, `${address}.json`);
     if (!existsSync(filePath)) {
-        throw new Error(`Wallet ${address} not found. Create one with 'eths wallet create'`);
+        throw new Error(`Wallet ${address} not found. Create one with 'goe wallet create'`);
     }
     return JSON.parse(readFileSync(filePath, 'utf8'));
 }

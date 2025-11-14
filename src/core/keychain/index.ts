@@ -7,7 +7,7 @@ const userHash = createHash('sha256')
     .digest('hex')
     .slice(0, 8);
 
-const SERVICE_NAME = `eths-git-${userHash}`;
+const SERVICE_NAME = `goe-cli-${userHash}`;
 
 export async function saveDecryptionKey(address: string, key: string): Promise<void> {
     await keytar.setPassword(SERVICE_NAME, address, key);

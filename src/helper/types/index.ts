@@ -3,7 +3,7 @@ import { PushRecord } from "./contract-types.js";
 export * from './api-types.js';
 export * from './contract-types.js';
 
-export type EthsProtocol = {
+export type GOEProtocol = {
     remoteUrl: string
     repoAddress: string
     chainId: number

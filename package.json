@@ -1,10 +1,10 @@
 {
-  "name": "eths-git",
-  "version": "0.1.0-beta",
+  "name": "goe-cli",
+  "version": "0.1.0",
   "type": "module",
   "bin": {
-    "git-remote-eths": "./dist/helper/index.js",
-    "eths": "./dist/cli/index.js"
+    "git-remote-goe": "./dist/helper/index.js",
+    "goe": "./dist/cli/index.js"
   },
   "scripts": {
     "prepublishOnly": "npm run build",
@@ -22,7 +22,7 @@
     "remote",
     "ethereum",
     "ethstorage",
-    "git-remote"
+    "git-remote-helper"
   ],
   "author": "EthStorage",
   "license": "MIT",

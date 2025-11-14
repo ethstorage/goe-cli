@@ -6,10 +6,10 @@ import { join } from "path";
 import { existsSync, mkdirSync } from "fs";
 
 import {
-    EthsProtocol, FetchRef, PackCreationResult,
+    GOEProtocol, FetchRef, PackCreationResult,
     PushRecord, PushRef, Ref
 } from "../types/index.js";
-import { ETHSRepoAbi } from "../../core/config/index.js";
+import { GOERepoAbi } from "../../core/config/index.js";
 import {
     createCommitBoundaryPacks,
     findCommonAncestor,
@@ -27,7 +27,7 @@ const ZERO_OID = "0000000000000000000000000000000000000000";
 const RPC_CONCURRENCY_LIMIT = 8;
 const DOWNLOAD_CONCURRENCY_LIMIT = 3;
 
-class Eths {
+class Goe {
     gitdir: string
     remoteUrl: string
     repoAddress: string
@@ -39,7 +39,7 @@ class Eths {
 
     contractDriver: ContractDriver
 
-    constructor(gitdir: string, protocol: EthsProtocol, contractDriver: ContractDriver) {
+    constructor(gitdir: string, protocol: GOEProtocol, contractDriver: ContractDriver) {
         this.gitdir = gitdir
         this.remoteUrl = protocol.remoteUrl
         this.repoAddress = protocol.repoAddress
@@ -50,7 +50,7 @@ class Eths {
         this.refs = new Map()
     }
 
-    static async create(gitdir: string, protocol: EthsProtocol): Promise<Eths> {
+    static async create(gitdir: string, protocol: GOEProtocol): Promise<Goe> {
         const decryptedWallet = await getWallet();
 
         const netConfig = protocol.netConfig;
@@ -67,8 +67,8 @@ class Eths {
         fd.setLogEnabled(false);
 
         const wallet = new ethers.Wallet(decryptedWallet.privateKey);
-        const contractDriver = new ContractDriver(rpcUrl, wallet, repoAddress, ETHSRepoAbi, fd);
-        return new Eths(gitdir, protocol, contractDriver);
+        const contractDriver = new ContractDriver(rpcUrl, wallet, repoAddress, GOERepoAbi, fd);
+        return new Goe(gitdir, protocol, contractDriver);
     }
 
     async doList(forPush: boolean) {
@@ -437,4 +437,4 @@ class Eths {
     }
 }
 
-export default Eths
+export default Goe
