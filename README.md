@@ -1,27 +1,64 @@
-# goe-cli
+# GoE — Git on Ethereum
 
-**goe-cli** is a decentralized Git solution designed to manage repositories on-chain. It provides two main components:
+GoE is a decentralized Git protocol built on Ethereum and EthStorage, providing a new standard for trustworthy, on-chain code hosting.  
+It redefines code ownership and verifiability, making your repositories free, secure, and permanently accessible, like Bitcoin.
 
-1. **Wallet CLI** – manage your blockchain wallets.
-2. **Repo CLI** – manage repositories and permissions on-chain.
-3. **Git Helper** – integrates with standard Git commands using the `goe://` protocol.
+
+With GoE, your code is:
+- **Censorship-resistant** — leveraging Ethereum’s permissionless network and global consensus for truly open collaboration.
+- **Immutable and traceable** — all commits and history are stored on-chain, verifiable for the long term.
+- **Web3-native** — fully compatible with Ethereum wallets, DAOs, DApps, and identity systems.
+- **Fully usable** — no new blockchain or extra node infrastructure required.
+- **Git-native** — seamless compatibility with standard Git commands via the `goe://` protocol.
 
 ---
 
-## 1. Wallet CLI
+## How GoE Works
 
-The wallet CLI allows you to create, list, and manage wallets. All wallet-based operations require unlocking the wallet first.
+GoE uses a three-layer model for seamless Git integration:
 
-### Commands
+1. **Git Remote Helper** — handles the `goe://` protocol for all Git commands.
+2. **Ethereum Smart Contracts** — manage branches, commits, and access permissions on-chain.
+3. **EthStorage (EIP-4844 Blob)** — stores large Git packfiles efficiently on Ethereum L2.
 
-- **List wallets**
+---
+
+## `goe://` Protocol
+
+GoE introduces a custom Git protocol to access on-chain repositories.
+
 ```bash
-goe wallet list
+goe://<repo_address>:<chain_id>
 ```
+
+- `<repo_address>` — the smart contract address of the repository
+- `<chain_id>` — the chain ID where the repository is deployed
+
+> This protocol is automatically handled by the Git Helper installed with `goe-cli`. No additional setup is required.
+
+---
+
+
+
+## Getting Started
+
+### Install the CLI
+```bash
+npm install -g goe-cli
+```
+
+## 1. Wallet Command
+
+Manage wallets that act as your on-chain identity.
 
 - **Create a wallet**
 ```bash
 goe wallet create
+```
+
+- **List wallets**
+```bash
+goe wallet list
 ```
 
 - **Unlock a wallet**
@@ -34,87 +71,57 @@ goe wallet unlock
 goe wallet lock
 ```
 
-**🔑 Note: Other wallet-dependent operations require the wallet to be unlocked.**
+> 🔑 Note: Unlock your wallet to perform wallet-dependent operations, and lock it when finished for security.
 
 
-## 2. Repo CLI
+## 2. Repo Command
 
-The repo CLI allows you to create repositories, set branches, and manage permissions on-chain.
-
-### Commands
-
-
-- **List repositories**
-```bash
-goe repo list --chain-id <chain_id>
-
-# eg.
-goe repo list --chain-id  11155111
-```
-
+Create and manage on-chain repositories and permissions.
 
 - **Create a repository**
 ```bash
 goe repo create <repo_name> --chain-id <chain_id>
+```
 
-# eg.
-goe repo create test-repo --chain-id 11155111
+- **List repositories**
+```bash
+goe repo list --chain-id <chain_id>
 ```
 
 - **Set default branch**
 ```bash
 goe repo default-branch <repo_address> <branch_name> --chain-id <chain_id>
-
-# eg.
-goe repo default-branch 0x0533dc9CD8...aF4279Bda20f55 master --chain-id 11155111
 ```
 
-
-- **Grant push access**
+- **Grant / Revoke push access**
 ```bash
-goe repo grant-push <repo_address> <puser_address> --chain-id <chain_id>
-
-# eg.
-goe repo grant-push 0x0533dc9CD84D...dfaF4279Bda20f55 0x1234... --chain-id 11155111
+goe repo grant-push <repo_address> <user_address> --chain-id <chain_id>
+goe repo revoke-push <repo_address> <user_address> --chain-id <chain_id>
 ```
 
-- **Revoke push access**
-```bash
-goe repo revoke-push <repo_address> <puser_address> --chain-id <chain_id>
 
-# eg.
-goe repo revoke-push 0x0533dc9CD84D...dfaF4279Bda20f55 0x1234... --chain-id 11155111
-```
-
----
-
-
-## 3. Git Helper
-
-The second CLI serves as a Git helper, allowing you to interact with decentralized Git repositories using standard Git commands.
-
-### Protocol
-
-Repositories are accessed via the **goe://** protocol:
+## Example Workflow
 
 ```bash
-goe://<repo_address>:<chain_id>
+# 1. Create or unlock your wallet
+goe wallet create
+goe wallet unlock
+
+# 2. Create a new repository on Sepolia
+goe repo create my-project --chain-id 11155111
+
+# 3. Set the default branch
+goe repo default-branch <repo_address> master --chain-id 11155111
+
+# 4. Grant collaborator push access
+goe repo grant-push <repo_address> <collaborator_address> --chain-id 11155111
 ```
 
-### Example:
+## Notes
+- GoE is fully compatible with existing Git workflows.
 
-```bash
-goe://0x08EdC3E3e8A2882B08CC92afeC9Dc0695EC99a43:11155111
-```
+- All commits and repository history are verifiable on-chain.
 
-This helper supports conventional Git commands while syncing with the on-chain repository.
+- “Not your keys, not your code.”
 
----
 
-## Getting Started
-
-### Install the CLI:
-
-```bash
-npm install -g goe-cli
-```
