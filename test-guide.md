@@ -5,7 +5,7 @@ This guide helps you quickly get started with GoE, a decentralized Git system on
 It covers wallet setup, repository creation, interacting with a sample repo, and migrating an existing GitHub project to
 GoE.
 
-GoE enables fully on-chain Git workflows: repositories are stored on Ethereum, immutable, and censorship-resistant.
+GoE enables fully on-chain Git workflows: repositories are stored on Ethereum and EthStorage, immutable, and censorship-resistant.
 
 > Prerequisite: You need a wallet with some ETH to pay gas fees for repository operations.
 
@@ -108,6 +108,17 @@ git add file.txt
 git commit -m "Add new file"
 git push
 ``` 
+
+> ⚠️ Performance Notes (for reference only):
+>
+> - Repository size: 145.7 MB
+> - Upload time via GoE: 3h 25m
+> - Download time via Git Helper (12 packfiles): 7.86 min
+> - Download time via regular Git HTTP clone: 4 min
+> - Cost to upload on Sepolia testnet: < 0.7 ETH (approximate)
+> - Bottleneck: Upload speed is dominated by blockchain transaction throughput and confirmation times, unlike centralized Git hosting.
+
+
 
 ## 3. Migrating an Existing GitHub Project to GoE
 

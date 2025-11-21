@@ -6,7 +6,7 @@ It redefines code ownership and verifiability, making your repositories free, se
 
 With GoE, your code is:
 - **Censorship-resistant** — leveraging Ethereum’s permissionless network and global consensus for truly open collaboration.
-- **Immutable and traceable** — all commits and history are stored on-chain, verifiable for the long term.
+- **Immutable and traceable** — smart contracts store branch heads and packfile metadata, while the actual packfiles live in EthStorage. Together they form a fully on-chain, tamper-proof Git history.
 - **Web3-native** — fully compatible with Ethereum wallets, DAOs, DApps, and identity systems.
 - **Fully usable** — no new blockchain or extra node infrastructure required.
 - **Git-native** — seamless compatibility with standard Git commands via the `goe://` protocol.
@@ -18,7 +18,7 @@ With GoE, your code is:
 GoE uses a three-layer model for seamless Git integration:
 
 1. **Git Remote Helper** — handles the `goe://` protocol for all Git commands.
-2. **Ethereum Smart Contracts** — manage branches, commits, and access permissions on-chain.
+2. **[Ethereum Smart Contracts](https://github.com/ethstorage/goe-contracts)** — manage branches, commits, and access permissions on-chain.
 3. **EthStorage (EIP-4844 Blob)** — stores large Git packfiles efficiently on Ethereum L2.
 
 ---
@@ -71,7 +71,9 @@ goe wallet unlock
 goe wallet lock
 ```
 
-> 🔑 Note: Unlock your wallet to perform wallet-dependent operations, and lock it when finished for security.
+> 🔑 **Note:** Wallets are secured using a password-derived key stored in your system keychain.
+> - **Unlock**: Enter your password to derive a key and store it in the system keychain to decrypt your private key for Git operations.
+> - **Lock**: Remove the derived key from the system keychain to secure your wallet.
 
 
 ## 2. Repo Command
