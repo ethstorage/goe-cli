@@ -21,6 +21,9 @@ GoE uses a three-layer model for seamless Git integration:
 2. **[Ethereum Smart Contracts](https://github.com/ethstorage/goe-contracts)** — manage branches, commits, and access permissions on-chain.
 3. **EthStorage (EIP-4844 Blob)** — stores large Git packfiles efficiently on Ethereum L2.
 
+📘 **Design Document:**  
+For a deeper technical overview of GoE's architecture and on-chain Git mechanics, see our [design doc](https://github.com/ethstorage/ethfs-git/blob/main/design.md).
+
 ---
 
 ## `goe://` Protocol
