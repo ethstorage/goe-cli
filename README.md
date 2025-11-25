@@ -1,12 +1,17 @@
 # GoE — Git on Ethereum
 
-GoE is a decentralized Git protocol built on Ethereum and EthStorage, providing a new standard for trustworthy, on-chain code hosting.  
-It redefines code ownership and verifiability, making your repositories free, secure, and permanently accessible, like Bitcoin.
+GoE is a decentralized Git protocol built on Ethereum and EthStorage, providing a new standard for trustworthy, on-chain
+code hosting.
 
+It redefines code ownership and verifiability, making your repositories **secure, censorship-resistant, and permanently
+accessible — just like blockchain assets.**
 
 With GoE, your code is:
-- **Censorship-resistant** — leveraging Ethereum’s permissionless network and global consensus for truly open collaboration.
-- **Immutable and traceable** — smart contracts store branch heads and packfile metadata, while the actual packfiles live in EthStorage. Together they form a fully on-chain, tamper-proof Git history.
+- **Censorship-resistant** — leveraging Ethereum’s permissionless network and global consensus for truly open
+  collaboration.
+- **Immutable and traceable** — GoE stores Git repository state fully on-chain: smart contracts track branch heads and
+  the metadata of Git objects, while the actual repository data is stored in EthStorage. Together, they provide a
+  tamper-proof, verifiable history.
 - **Web3-native** — fully compatible with Ethereum wallets, DAOs, DApps, and identity systems.
 - **Fully usable** — no new blockchain or extra node infrastructure required.
 - **Git-native** — seamless compatibility with standard Git commands via the `goe://` protocol.
@@ -19,10 +24,10 @@ GoE uses a three-layer model for seamless Git integration:
 
 1. **Git Remote Helper** — handles the `goe://` protocol for all Git commands.
 2. **[Ethereum Smart Contracts](https://github.com/ethstorage/goe-contracts)** — manage branches, commits, and access permissions on-chain.
-3. **EthStorage (EIP-4844 Blob)** — stores large Git packfiles efficiently on Ethereum L2.
+3. **EthStorage (EIP-4844 Blob)** — stores large Git data objects efficiently on Ethereum L2.
 
 📘 **Design Document:**  
-For a deeper technical overview of GoE's architecture and on-chain Git mechanics, see our [design doc](https://github.com/ethstorage/ethfs-git/blob/main/design.md).
+For a deeper technical overview of GoE's architecture and on-chain Git mechanics, see our [design doc](https://github.com/ethstorage/ethfs-git/pull/1/files).
 
 ---
 
