@@ -3,7 +3,10 @@
 import { program } from 'commander';
 import walletCmd from "./wallet/index.js";
 import repoCmd from "./repo/index.js";
-import pkg from '../../package.json' with { type: 'json' };
+
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const pkg = require("../../package.json");
 
 program
     .version(pkg.version, '-v, --version')

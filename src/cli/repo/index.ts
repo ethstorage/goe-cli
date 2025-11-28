@@ -131,4 +131,29 @@ repoCmd
         }
     });
 
+repoCmd
+    .command("branches <repo-address|ENS>")
+    .addOption(chainIdOption)
+    .description("List all branches in a repository")
+    .action(async (repo, cmd) => {
+        const chainId = cmd.chainId;
+        if (!chainId) return logger.error("You must specify --chain-id.");
+
+        try {
+            logger.info(`Fetching branches for ${repo}...`);
+            const list = await Repo.listBranches(repo, chainId);
+            if (list.length === 0) {
+                logger.info("No branches found.");
+                return;
+            }
+
+            logger.success(`Found ${list.length} branches:`);
+            list.forEach((b, idx) => {
+                logger.normal(`${idx + 1}. ${b.name}   (head: ${b.hash})`);
+            });
+        } catch (e: any) {
+            logger.error(`Failed to fetch branches: ${e.message}`);
+        }
+    });
+
 export default repoCmd;

@@ -107,7 +107,19 @@ export namespace Factory {
 export namespace Repo {
     export async function setDefaultBranch(repoAddress: string, chainId: number, branchName: string) {
         const repo = await getRepoContract(repoAddress, chainId);
-        const tx = await repo.setDefaultBranch(ethers.toUtf8Bytes(branchName));
+
+        const fullName = normalizeBranchName(branchName);
+
+        // check
+        const branches = await Repo.listBranches(repoAddress, chainId);
+        const exists = branches.some(b => normalizeBranchName(b.name) === fullName);
+        if (!exists) {
+            throw new Error(
+                `Branch "${branchName}" does not exist on this repository.`
+            );
+        }
+
+        const tx = await repo.setDefaultBranch(ethers.toUtf8Bytes(fullName));
         await waitForTx(tx, "setDefaultBranch");
     }
 
@@ -143,4 +155,46 @@ export namespace Repo {
         const repo = await getRepoContract(repoAddress, chainId);
         return repo.canForcePush(account, ethers.toUtf8Bytes(refName));
     }
+
+    export async function listBranches(repoAddress: string, chainId: number, pageSize: number = 50) {
+        const repo = await getRepoContract(repoAddress, chainId);
+
+        let start = 0;
+        const all: { name: string; hash: string }[] = [];
+
+        while (true) {
+            const items = await repo.listBranches(start, pageSize);
+            if (items.length === 0) break;
+
+            const mapped = items.map((b: any) => {
+                const raw = ethers.toUtf8String(b.name); // bytes → string
+                const clean = raw.startsWith("refs/heads/")
+                    ? raw.replace("refs/heads/", "")
+                    : raw.startsWith("refs/")
+                        ? raw.replace("refs/", "")
+                        : raw;
+                return {
+                    name: clean,
+                    hash: ethers.hexlify(b.hash).slice(2)
+                };
+            });
+            all.push(...mapped);
+
+            if (items.length < pageSize) break;
+            start += pageSize;
+        }
+        return all;
+    }
+}
+
+function normalizeBranchName(branch: string): string {
+    if (branch.startsWith("refs/")) return branch;
+
+    // tags
+    if (branch.startsWith("tags/")) {
+        return `refs/${branch}`;
+    }
+
+    // heads
+    return `refs/heads/${branch}`;
 }
