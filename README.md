@@ -98,6 +98,11 @@ goe repo create <repo_name> --chain-id <chain_id>
 goe repo list --chain-id <chain_id>
 ```
 
+- **List branches**
+```bash
+goe repo branches <repo_address> --chain-id <chain_id>
+```
+
 - **Set default branch**
 ```bash
 goe repo default-branch <repo_address> <branch_name> --chain-id <chain_id>
@@ -126,6 +131,11 @@ goe repo default-branch <repo_address> master --chain-id 11155111
 # 4. Grant collaborator push access
 goe repo grant-push <repo_address> <collaborator_address> --chain-id 11155111
 ```
+
+## Additional Reference
+
+For a practical guide with example commands and workflows, see **[test-guide.md](./test-guide.md)**.
+
 
 ## Notes
 - GoE is fully compatible with existing Git workflows.

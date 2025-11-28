@@ -57,6 +57,15 @@ goe repo list --chain-id <chain_id>
 goe repo list --chain-id 11155111
 ``` 
 
+- List repository branches:
+
+```bash
+goe repo branches <repo_address> --chain-id <chain_id>
+
+# Example:
+goe repo branches 0x3BB6F5b45649E9793Ecad8C909502566398CDb4C --chain-id 11155111
+``` 
+
 ### 1.4 Link Local Git Repository
 
 - For a new local repo:
@@ -85,6 +94,7 @@ git add .
 git commit -m "Initial commit"
 git push -u origin main
 ``` 
+
 
 ## 2. Working with an Existing GoE Repository
 
