@@ -125,16 +125,32 @@ goe wallet unlock
 # 2. Create a new repository on Sepolia
 goe repo create my-project --chain-id 11155111
 
-# 3. Set the default branch
+# Output:
+# Repo address: 0xABCDEF...
+
+# 3. Use normal git operations to create the first commit and push it on-chain
+git init
+git remote add origin goe://0xABCDEF...:11155111
+
+echo "# My Project" > README.md
+git add .
+git commit -m "Initial commit"
+
+# The first push creates the branch on-chain (e.g. master),
+# and this branch becomes the default branch automatically.
+git push origin master
+
+# 4. Set the default branch
+# Only needed if you want to change it later.
 goe repo default-branch <repo_address> master --chain-id 11155111
 
-# 4. Grant collaborator push access
+# 5. Grant collaborator push access
 goe repo grant-push <repo_address> <collaborator_address> --chain-id 11155111
 ```
 
 ## Additional Reference
 
-For a practical guide with example commands and workflows, see **[test-guide.md](./test-guide.md)**.
+For a practical guide with example commands and workflows, see **[test-guide.md](./TEST_GUIDE.md)**.
 
 
 ## Notes

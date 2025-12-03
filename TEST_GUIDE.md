@@ -108,9 +108,6 @@ git clone goe://0x56f87B828CCe0943e00CCf763e63688Aba4ae834:11155111 blog
 
 By default, your wallet address does **not** have push access to this repository.
 
-If you want to modify this repository, please send your wallet address to us (for example, via the Issues page on this
-GitHub project), so we can grant you push permission.
-
 - Once granted, you can commit and push as usual:
 
 ```bash
