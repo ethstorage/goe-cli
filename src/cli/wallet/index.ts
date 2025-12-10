@@ -7,6 +7,7 @@ import {
     lockWallet,
     manualUnlockWallet
 } from "../../core/wallet/index.js";
+import { getDecryptionKey } from "../../core/keychain/index.js";
 import { promptPassword } from "./utils.js";
 import { logger } from "../utils/log.js";
 
@@ -86,13 +87,26 @@ walletCmd
 walletCmd
     .command('list')
     .description('List all wallet addresses')
-    .action(() => {
+    .action(async () => {
         const addresses = listWalletAddresses();
         if (addresses.length === 0) {
             return logger.info('No wallets found. Create one with `goe wallet create`');
         }
         logger.info('Wallets:');
-        addresses.forEach(addr => logger.info(`- ${addr}`));
+        for (const addr of addresses) {
+            let status = 'locked';
+            try {
+                const decryptionKey = await getDecryptionKey(addr);
+                if (decryptionKey) {
+                    status = 'unlocked';
+                }
+            } catch {
+                status = 'locked';
+            }
+
+            const statusColor = status === 'unlocked' ? chalk.green : chalk.gray;
+            logger.info(`- ${addr} ${status === 'unlocked' ? statusColor('(🔓UNLOCKED)') : statusColor('(🔒LOCKED)')}`);
+        }
     });
 
 export function printWalletCreationSummary(address: string, privateKey: string) {

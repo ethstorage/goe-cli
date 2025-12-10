@@ -35,7 +35,8 @@ function decodeAndCheckEntry(encoded: string, idleTimeoutHours: number):
 
 export async function createKeytarStore(config: StorageConfig): Promise<StorageBackend> {
     try {
-        const keytar = await import('keytar');
+        const keytarModule = await import('keytar') as any;
+        const keytar = keytarModule.default || keytarModule;
         await keytar.getPassword(config.serviceName, '__test__');
         return {
             type: 'keytar',

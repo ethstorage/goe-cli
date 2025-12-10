@@ -150,11 +150,18 @@ export class FileStorage implements StorageBackend {
 
     private deriveMachineKey(): Buffer {
         const fingerprint = this.getMachineFingerprint();
+        const isMemoryConstrained = process.env.CI === 'true' ||
+            process.env.DOCKER === 'true' ||
+            process.memoryUsage().heapTotal < 100 * 1024 * 1024;
+        const params = isMemoryConstrained
+            ? { N: 8192, r: 8, p: 1 }
+            : { N: 16384, r: 8, p: 1 };
+
         return scryptSync(
             fingerprint,
             'goe-cli-machine-salt',
             32,
-            { N: 32768, r: 8, p: 1 }
+            params
         ) as Buffer;
     }
 
