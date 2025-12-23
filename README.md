@@ -56,8 +56,8 @@ npm install -g goe-cli
 ```
 
 > ⚠️ **Note for Linux Users:**  
-> GoE CLI relies on keytar for secure key storage. On Linux or in environments missing libsecret-1.so.0, keytar will not work, and GoE CLI cannot be used.
-
+> GoE CLI currently supports macOS and Windows. Linux support is still in progress, as the CLI relies on keytar for
+> secure key storage, which is not yet working reliably on Linux. We’re actively working on adding full Linux support.
 
 ## 1. Wallet Command
 
