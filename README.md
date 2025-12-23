@@ -55,6 +55,12 @@ goe://<repo_address>:<chain_id>
 npm install -g goe-cli
 ```
 
+> ⚠️ **Note for Linux Users:**  
+> On Linux systems, GoE CLI depends on `keytar` for secure key storage.  
+> If your system is missing `libsecret-1.so.0` or other required libraries, keytar will fail, and GoE CLI may not start.  
+> To fix this, install the required system libraries (e.g., `sudo apt install libsecret-1-dev` on Debian/Ubuntu).
+
+
 ## 1. Wallet Command
 
 Manage wallets that act as your on-chain identity.
