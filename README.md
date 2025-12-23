@@ -56,9 +56,7 @@ npm install -g goe-cli
 ```
 
 > ⚠️ **Note for Linux Users:**  
-> On Linux systems, GoE CLI depends on `keytar` for secure key storage.  
-> If your system is missing `libsecret-1.so.0` or other required libraries, keytar will fail, and GoE CLI may not start.  
-> To fix this, install the required system libraries (e.g., `sudo apt install libsecret-1-dev` on Debian/Ubuntu).
+> GoE CLI relies on keytar for secure key storage. On Linux or in environments missing libsecret-1.so.0, keytar will not work, and GoE CLI cannot be used.
 
 
 ## 1. Wallet Command
