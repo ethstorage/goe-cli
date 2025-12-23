@@ -4,7 +4,7 @@ import { createKeytarStore } from './keytar-store.js';
 import { FileStorage } from './file-store.js';
 import { StorageBackend, StorageConfig } from './types.js';
 
-const DEFAULT_IDLE_TIMEOUT_HOURS = 2;
+const DEFAULT_IDLE_TIMEOUT_HOURS = 24;
 const userHash = createHash('sha256')
     .update(homedir())
     .digest('hex')

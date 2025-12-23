@@ -142,13 +142,11 @@ class Goe {
             }
 
             if (internalResult.startsWith("error")) {
-                // error <ref> <reason> -> ng <ref> <reason>
-                const reason = internalResult.slice(6);
-                outLines.push(`ng ${reason}\n`);
+                // error <ref> <reason>
+                outLines.push(`${internalResult}\n`);
             } else if (internalResult.startsWith("ok")) {
-                // ok <ref> -> ok <ref>
-                const ref = internalResult.slice(3);
-                outLines.push(`ok ${ref}\n`);
+                // ok <ref>
+                outLines.push(`${internalResult}\n`);
 
                 if (src !== "") {
                     const newOid = await getOidFromRef(src, this.gitdir);
@@ -157,7 +155,7 @@ class Goe {
                     this.refs.delete(dst);
                 }
             } else {
-                outLines.push(`ng ${dst} internal helper error: unknown status\n`);
+                outLines.push(`error ${dst} internal helper error: unknown status\n`);
             }
         }
 

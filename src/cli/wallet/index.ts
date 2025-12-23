@@ -114,8 +114,9 @@ export function printWalletCreationSummary(address: string, privateKey: string) 
     const gold = chalk.hex('#FFD700').bold;
     const whiteBold = chalk.black.bold;
 
-    const styleAddress = chalk.cyanBright.bold(address);
-    const styledPrivateKey = chalk.redBright.bold(privateKey);
+    const cyanBright = chalk.cyanBright.bold;
+    const styleAddress = cyanBright(address);
+    const styledPrivateKey = redBold(privateKey);
 
     logger.success(`Wallet created successfully!\n`);
 
