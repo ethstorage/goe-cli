@@ -174,7 +174,7 @@ export class ContractDriver {
 
   // --- FlatDirectory Operations (No RPC Retry - relies on FlatDirectory internal retry) ---
 
-  async uploadPack(dst: string, fileKey: string, packFilePath: string): Promise<boolean> {
+  async uploadPack(dst: string, fileKey: string, packFilePath: string, gasIncPct: number): Promise<boolean> {
     let status = true;
     let currentSuccessIndex = -1;
 
@@ -213,7 +213,7 @@ export class ContractDriver {
       content: file,
       chunkHashes: hashes,
       type: UploadType.Blob,
-      gasIncPct: 1,
+      gasIncPct: gasIncPct,
       isConfirmedNonce: true,
       callback: uploadCallback
     };

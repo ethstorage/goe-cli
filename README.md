@@ -59,7 +59,7 @@ npm install -g goe-cli
 > GoE CLI currently supports macOS and Windows. Linux support is still in progress, as the CLI relies on keytar for
 > secure key storage, which is not yet working reliably on Linux. We’re actively working on adding full Linux support.
 
-## 1. Wallet Command
+### 1. Wallet Command
 
 Manage wallets that act as your on-chain identity.
 
@@ -87,8 +87,7 @@ goe wallet lock
 > - **Unlock**: Enter your password to derive a key and store it in the system keychain to decrypt your private key for Git operations.
 > - **Lock**: Remove the derived key from the system keychain to secure your wallet.
 
-
-## 2. Repo Command
+### 2. Repo Command
 
 Create and manage on-chain repositories and permissions.
 
@@ -118,39 +117,62 @@ goe repo grant-push <repo_address> <user_address> --chain-id <chain_id>
 goe repo revoke-push <repo_address> <user_address> --chain-id <chain_id>
 ```
 
+### 3. Example Workflow
 
-## Example Workflow
-
+#### 1). Create or unlock your wallet
 ```bash
-# 1. Create or unlock your wallet
 goe wallet create
 goe wallet unlock
+```
 
-# 2. Create a new repository on Sepolia
+#### 2). Create a new repository on Sepolia
+```bash
 goe repo create my-project --chain-id 11155111
 
 # Output:
 # Repo address: 0xABCDEF...
+```
 
-# 3. Use normal git operations to create the first commit and push it on-chain
+#### 3). Use normal git operations to create the first commit
+```bash
 git init
 git remote add origin goe://0xABCDEF...:11155111
 
 echo "# My Project" > README.md
 git add .
 git commit -m "Initial commit"
+```
 
+#### 4). Push changes on-chain (optionally increase gas)
+```bash
 # The first push creates the branch on-chain (e.g. master),
 # and this branch becomes the default branch automatically.
 git push origin master
+```
 
-# 4. Set the default branch
+**⚠️ Optional:** If the push transaction is slow or stuck, temporarily increase the gas using the environment variable `GOE_GAS_INC_PCT`.
+
+Examples:
+- 0 → default gas (no increase)
+- 1 → +1% gas
+- 100 → +100% gas (double the base gas)
+
+```bash
+# Increase gas by 10%
+GOE_GAS_INC_PCT=10 git push -u origin main
+```
+
+#### 5). Set the default branch
+```bash
 # Only needed if you want to change it later.
 goe repo default-branch <repo_address> master --chain-id 11155111
+```
 
-# 5. Grant collaborator push access
+#### 6). Grant collaborator push access
+```bash
 goe repo grant-push <repo_address> <collaborator_address> --chain-id 11155111
 ```
+
 
 ## Additional Reference
 
