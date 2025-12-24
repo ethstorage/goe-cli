@@ -16,6 +16,8 @@ export async function createImpl(env: NodeJS.ProcessEnv): Promise<Api> {
   const [, , , remoteUrl] = process.argv
   const protocol = await parseGoeURI(remoteUrl);
 
+  const gasIncPct = Number(process.env.GOE_GAS_INC_PCT ?? 10);
+
   goe = await Goe.create(gitdir, protocol);
 
 
@@ -24,7 +26,7 @@ export async function createImpl(env: NodeJS.ProcessEnv): Promise<Api> {
       return await goe.doList(forPush);
     },
     handlePush: async (refs) => {
-      return await goe.doPush(refs);
+      return await goe.doPush(refs, gasIncPct);
     },
     handleFetch: async (p) => {
       return await goe.doFetch(p);

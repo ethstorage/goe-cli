@@ -116,7 +116,7 @@ class Goe {
         return "\n\n"
     }
 
-    async doPush(refs: PushRef[]): Promise<string> {
+    async doPush(refs: PushRef[], gasIncPct: number): Promise<string> {
         let outLines: string[] = []
 
         for (let ref of refs) {
@@ -129,7 +129,7 @@ class Goe {
                 internalResult = `error ${dst} refusing to push to non-branch ref`;
             } else if (!force) {
                 // fast-forward push
-                internalResult = await this.handlePush(src, dst)
+                internalResult = await this.handlePush(src, dst, gasIncPct)
             } else {
                 // force push or delete
                 if (src === "") {
@@ -137,7 +137,7 @@ class Goe {
                     internalResult = await this.handleBranchDeletion(dst, this.defaultBranch);
                 } else {
                     // force push
-                    internalResult = await this.handleForcePush(src, dst);
+                    internalResult = await this.handleForcePush(src, dst, gasIncPct);
                 }
             }
 
@@ -249,7 +249,7 @@ class Goe {
     }
 
     // push
-    private async handlePush(src: string, dst: string): Promise<string> {
+    private async handlePush(src: string, dst: string, gasIncPct: number): Promise<string> {
         try {
             const hasPusherPerm = await this.contractDriver.hasPushPermission();
             if (!hasPusherPerm) {
@@ -279,7 +279,7 @@ class Goe {
 
                     for (const chunk of result.chunks) {
                         // 2.1 upload packfile
-                        let status = await this.contractDriver.uploadPack(dst, chunk.endOid, chunk.path);
+                        let status = await this.contractDriver.uploadPack(dst, chunk.endOid, chunk.path, gasIncPct);
                         if (!status) {
                             return `error ${dst} upload pack file fail`;
                         }
@@ -310,7 +310,7 @@ class Goe {
         }
     }
 
-    private async handleForcePush(src: string, dst: string): Promise<string> {
+    private async handleForcePush(src: string, dst: string, gasIncPct: number): Promise<string> {
         try {
             const hasPusherPerm = await this.contractDriver.hasForcePushPermission(dst);
             if (!hasPusherPerm) {
@@ -360,7 +360,7 @@ class Goe {
 
                     for (const chunk of packFileResult.chunks) {
                         // 3.1 upload packfile
-                        let status = await this.contractDriver.uploadPack(dst, chunk.endOid, chunk.path);
+                        let status = await this.contractDriver.uploadPack(dst, chunk.endOid, chunk.path, gasIncPct);
                         if (!status) {
                             return `error ${dst} upload pack file fail`;
                         }
