@@ -16,7 +16,7 @@ export async function createImpl(env: NodeJS.ProcessEnv): Promise<Api> {
   const [, , , remoteUrl] = process.argv
   const protocol = await parseGoeURI(remoteUrl);
 
-  const gasIncPct = getGasIncPct();
+  const gasIncPct = Number(process.env.GOE_GAS_INC_PCT ?? 10);
 
   goe = await Goe.create(gitdir, protocol);
 
@@ -35,25 +35,4 @@ export async function createImpl(env: NodeJS.ProcessEnv): Promise<Api> {
       await goe.close();
     }
   };
-}
-
-function getGasIncPct(): number {
-  const envKeys = Object.keys(process.env);
-
-  const patterns = [
-    /^GOE?_?GAS(_INC)?_?PCT$/i,   // GOE_GAS_INC_PCT, GOE_GAS_PCT, GAS_INC_PCT, GAS_PCT
-    /^GOE?_?INC_?GAS$/i,           // GOE_INC_GAS, INC_GAS
-  ];
-
-  for (const pattern of patterns) {
-    const key = envKeys.find(k => pattern.test(k));
-    if (key) {
-      const value = process.env[key];
-      if (value) {
-        const n = Number(value);
-        if (!isNaN(n)) return n;
-      }
-    }
-  }
-  return 1;
 }
