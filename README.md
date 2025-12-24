@@ -150,7 +150,7 @@ git commit -m "Initial commit"
 git push origin master
 ```
 
-**⚠️ Optional:** If the push transaction is slow or stuck, temporarily increase the gas using the environment variable `GOE_GAS_INC_PCT`.
+**⚠️ Optional:** If the push transaction is slow to confirm or becomes stuck, you can temporarily increase the gas price by setting the `GOE_GAS_INC_PCT` environment variable.
 
 Examples:
 - 0 → default gas (no increase)

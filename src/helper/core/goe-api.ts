@@ -55,5 +55,5 @@ function getGasIncPct(): number {
       }
     }
   }
-  return 0;
+  return 1;
 }
