@@ -37,15 +37,18 @@ function decodeAndCheckEntry(encoded: string, idleTimeoutHours: number):
 function checkKeytarHealth(): boolean {
     const probeScript = `
         process.on('unhandledRejection', () => process.exit(1));
-        try {
-            const keytar = (await import('keytar')).default;
-            const service = 'goe-cli-probe-${Math.random().toString(36).slice(2, 6)}';
-            await keytar.setPassword(service, 't', 'v');
-            await keytar.deletePassword(service, 't');
-            process.exit(0);
-        } catch (e) {
-            process.exit(1);
-        }
+        (async () => {
+            try {
+                const k = await import('keytar');
+                const keytar = k.default || k;
+                const s = 'probe-' + Math.random().toString(36).slice(2,6);
+                await keytar.setPassword(s, 't', 'v');
+                await keytar.deletePassword(s, 't');
+                process.exit(0);
+            } catch {
+                process.exit(1);
+            }
+        })();
     `.replace(/\s+/g, ' ').trim();
 
     try {
@@ -57,8 +60,7 @@ function checkKeytarHealth(): boolean {
         ], {
             stdio: 'ignore',
             timeout: 4000,
-            windowsHide: true,
-            env: { ...process.env, NODE_ENV: 'production' }
+            env: process.env
         });
 
         return !result.error && result.status === 0;
