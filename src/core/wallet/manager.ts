@@ -8,6 +8,13 @@ export async function createPrivateKeyWallet(password: string): Promise<{ addres
     const { privateKey, address } = generatePrivateKey();
 
     const encryptedPrivateKey = encrypt(privateKey, password);
+
+    // save password
+    const salt = encryptedPrivateKey.split(':')[0];
+    const decryptionKey = deriveKey(password, salt);
+    await saveDecryptionKey(address, decryptionKey);
+
+    // save wallet
     const walletFile: EncryptedWalletFile = {
         address,
         encryptedPrivateKey,
@@ -15,10 +22,6 @@ export async function createPrivateKeyWallet(password: string): Promise<{ addres
         createdAt: new Date().toISOString()
     };
     saveEncryptedWallet(walletFile);
-
-    const salt = encryptedPrivateKey.split(':')[0];
-    const decryptionKey = deriveKey(password, salt);
-    await saveDecryptionKey(address, decryptionKey);
 
     return {address, privateKey};
 }
