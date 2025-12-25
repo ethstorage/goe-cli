@@ -55,10 +55,6 @@ goe://<repo_address>:<chain_id>
 npm install -g goe-cli
 ```
 
-> ⚠️ **Note for Linux Users:**  
-> GoE CLI currently supports macOS and Windows. Linux support is still in progress, as the CLI relies on keytar for
-> secure key storage, which is not yet working reliably on Linux. We’re actively working on adding full Linux support.
-
 ### 1. Wallet Command
 
 Manage wallets that act as your on-chain identity.
