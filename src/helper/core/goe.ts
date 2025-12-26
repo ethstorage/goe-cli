@@ -306,7 +306,8 @@ class Goe {
 
             return `ok ${dst}`;
         } catch (err: any) {
-            return `error ${dst} ${err.message}`;
+            log(`[ERROR] handle push ${dst}: ${this.formatErrorForLog(err)}`);
+            return `error ${dst} handle push fail`;
         }
     }
 
@@ -398,7 +399,8 @@ class Goe {
 
             return `ok ${dst}`;
         } catch (err: any) {
-            return `error ${dst} ${err.message}`;
+            log(`[ERROR] handle force push ${dst}: ${this.formatErrorForLog(err)}`);
+            return `error ${dst} handle force push fail`;
         }
     }
 
@@ -426,8 +428,29 @@ class Goe {
 
             return `ok ${dst}`;
         } catch (err: any) {
-            return `error ${dst} ${err.message}`;
+            log(`[ERROR] handle branch deletion ${dst}: ${this.formatErrorForLog(err)}`);
+            return `error ${dst} handle branch deletion fail`;
         }
+    }
+
+    private formatErrorForLog(err: unknown, maxLen = 1400): string {
+        let msg: string;
+        if (err instanceof Error) {
+            msg = err.stack || err.message;
+        } else {
+            msg = String(err);
+        }
+        msg = msg.replace(/\s+/g, ' ').trim();
+        if (msg.length <= maxLen) {
+            return msg;
+        }
+
+        const len = Math.floor(maxLen * 0.4);
+        return (
+            msg.slice(0, len) +
+            ' ... ' +
+            msg.slice(msg.length - len)
+        );
     }
 
     async close(): Promise<void> {
