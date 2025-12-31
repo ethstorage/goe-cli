@@ -6,11 +6,18 @@ import { logger } from "../utils/log.js";
 // 🌐 Common chainId option
 const chainIdOption = new Option(
     "-c, --chain-id <number>",
-    "Specify the chain ID (e.g., 1=Mainnet, 5=Goerli, 11155111=Sepolia)"
+    "Specify the chain ID (e.g., 1=Mainnet, 11155111=Sepolia)"
 ).argParser((val) => parseInt(val, 10));
 
 const repoCmd = new Command('repo')
     .description('Manage decentralized repositories');
+
+
+function resolveChainId(cmd: any): number | null {
+    const chainId = cmd.chainId ?? (process.env.GOE_CHAIN_ID ? parseInt(process.env.GOE_CHAIN_ID, 10) : undefined);
+    if (!Number.isInteger(chainId)) return null;
+    return chainId;
+}
 
 // =============== 🧱 Factory Commands =================
 
@@ -20,8 +27,8 @@ repoCmd
     .addOption(chainIdOption)
     .description("Create a new repository (requires --chain-id)")
     .action(async (name, cmd) => {
-        const chainId = cmd.chainId;
-        if (!chainId) return logger.error("You must specify --chain-id.");
+        const chainId = resolveChainId(cmd);
+        if (chainId === null) return logger.error("Chain ID not specified. Use --chain-id or set GOE_CHAIN_ID environment variable.");
 
         try {
             logger.info(`Creating repository "${name}" on chain ${chainId}...`);
@@ -41,8 +48,8 @@ repoCmd
     .option("-s, --start <number>", "Start index", (val) => parseInt(val, 10), 0)
     .option("-l, --limit <number>", "Items per page", (val) => parseInt(val, 10), 20)
     .action(async (cmd) => {
-        const chainId = cmd.chainId;
-        if (!chainId) return logger.error("You must specify --chain-id.");
+        const chainId = resolveChainId(cmd);
+        if (chainId === null) return logger.error("Chain ID not specified. Use --chain-id or set GOE_CHAIN_ID environment variable.");
 
         try {
             const repos = await Factory.getUserReposPaginated(chainId, cmd.start, cmd.limit);
@@ -65,8 +72,8 @@ repoCmd
     .addOption(chainIdOption)
     .description("Set the default branch of a repository (requires --chain-id)")
     .action(async (repo, branch, cmd) => {
-        const chainId = cmd.chainId;
-        if (!chainId) return logger.error("You must specify --chain-id.");
+        const chainId = resolveChainId(cmd);
+        if (chainId === null) return logger.error("Chain ID not specified. Use --chain-id or set GOE_CHAIN_ID environment variable.");
 
         try {
             logger.info(`Setting default branch for ${repo} to "${branch}"...`);
@@ -83,8 +90,8 @@ repoCmd
     .addOption(chainIdOption)
     .description("Grant push permission to an address (requires --chain-id)")
     .action(async (repo, address, cmd) => {
-        const chainId = cmd.chainId;
-        if (!chainId) return logger.error("You must specify --chain-id.");
+        const chainId = resolveChainId(cmd);
+        if (chainId === null) return logger.error("Chain ID not specified. Use --chain-id or set GOE_CHAIN_ID environment variable.");
 
         try {
             logger.info(`Granting push permission to ${address} on ${repo}...`);
@@ -101,8 +108,8 @@ repoCmd
     .addOption(chainIdOption)
     .description("Revoke push permission from an address (requires --chain-id)")
     .action(async (repo, address, cmd) => {
-        const chainId = cmd.chainId;
-        if (!chainId) return logger.error("You must specify --chain-id.");
+        const chainId = resolveChainId(cmd);
+        if (chainId === null) return logger.error("Chain ID not specified. Use --chain-id or set GOE_CHAIN_ID environment variable.");
 
         try {
             logger.info(`Revoking push permission from ${address}...`);
@@ -119,8 +126,8 @@ repoCmd
     .addOption(chainIdOption)
     .description("Grant maintainer permission to an address (requires --chain-id)")
     .action(async (repo, address, cmd) => {
-        const chainId = cmd.chainId;
-        if (!chainId) return logger.error("You must specify --chain-id.");
+        const chainId = resolveChainId(cmd);
+        if (chainId === null) return logger.error("Chain ID not specified. Use --chain-id or set GOE_CHAIN_ID environment variable.");
 
         try {
             logger.info(`Granting maintainer role to ${address} on ${repo}...`);
@@ -136,8 +143,8 @@ repoCmd
     .addOption(chainIdOption)
     .description("List all branches in a repository")
     .action(async (repo, cmd) => {
-        const chainId = cmd.chainId;
-        if (!chainId) return logger.error("You must specify --chain-id.");
+        const chainId = resolveChainId(cmd);
+        if (chainId === null) return logger.error("Chain ID not specified. Use --chain-id or set GOE_CHAIN_ID environment variable.");
 
         try {
             logger.info(`Fetching branches for ${repo}...`);
