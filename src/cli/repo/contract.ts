@@ -185,6 +185,20 @@ export namespace Repo {
         }
         return all;
     }
+
+    export async function getDefaultBranch(repoAddress: string, chainId: number) {
+        const repo = await getRepoContract(repoAddress, chainId);
+        const [refBytes,] = await repo.getDefaultBranch();
+        if (refBytes.length === 0) {
+            return null;
+        }
+        const branch = ethers.toUtf8String(refBytes);
+        return branch.startsWith("refs/heads/")
+            ? branch.replace("refs/heads/", "")
+            : branch.startsWith("refs/")
+                ? branch.replace("refs/", "")
+                : branch;
+    }
 }
 
 function normalizeBranchName(branch: string): string {

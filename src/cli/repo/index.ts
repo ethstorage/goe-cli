@@ -154,9 +154,15 @@ repoCmd
                 return;
             }
 
+            let defaultBranch: string | null = null;
+            try {
+                defaultBranch = await Repo.getDefaultBranch(repo, chainId);
+            } catch {}
+
             logger.success(`Found ${list.length} branches:`);
             list.forEach((b, idx) => {
-                logger.normal(`${idx + 1}. ${b.name}   (head: ${b.hash})`);
+                const marker = b.name === defaultBranch ? " (default)" : "";
+                logger.normal(`${idx + 1}. ${b.name}${marker}   (head: ${b.hash})`);
             });
         } catch (e: any) {
             logger.error(`Failed to fetch branches: ${e.message}`);
