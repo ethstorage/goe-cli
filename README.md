@@ -50,12 +50,31 @@ goe://<repo_address>:<chain_id>
 
 ## Getting Started
 
-### Install the CLI
+### 1. Install the CLI
 ```bash
 npm install -g goe-cli
 ```
 
-### 1. Wallet Command
+### 2. Global Configuration
+Some GoE CLI parameters can be provided either as command-line flags or via environment variables.
+
+#### Chain ID
+Most `goe repo` commands require a target chain ID. You can specify it in one of the following ways:
+
+- **Command-line flag** (highest priority):
+```bash
+goe repo create my-repo --chain-id 11155111
+```
+
+- **Environment variable** (applies to all commands in the current shell):
+```bash
+export GOE_CHAIN_ID=11155111
+goe repo create my-repo
+```
+
+If both are provided, the command-line flag overrides the environment variable.
+
+### 3. Wallet Command
 
 Manage wallets that act as your on-chain identity.
 
@@ -83,37 +102,39 @@ goe wallet lock
 > - **Unlock**: Enter your password to derive a key and store it in the system keychain to decrypt your private key for Git operations.
 > - **Lock**: Remove the derived key from the system keychain to secure your wallet.
 
-### 2. Repo Command
+### 4. Repo Command
 
 Create and manage on-chain repositories and permissions.
 
 - **Create a repository**
 ```bash
-goe repo create <repo_name> --chain-id <chain_id>
+goe repo create <repo_name> [--chain-id <chain_id>]
 ```
+> If --chain-id is not provided, GoE will use the GOE_CHAIN_ID environment variable.
+
 
 - **List repositories**
 ```bash
-goe repo list --chain-id <chain_id>
+goe repo list [--chain-id <chain_id>]
 ```
 
 - **List branches**
 ```bash
-goe repo branches <repo_address> --chain-id <chain_id>
+goe repo branches <repo_address> [--chain-id <chain_id>]
 ```
 
 - **Set default branch**
 ```bash
-goe repo default-branch <repo_address> <branch_name> --chain-id <chain_id>
+goe repo default-branch <repo_address> <branch_name> [--chain-id <chain_id>]
 ```
 
 - **Grant / Revoke push access**
 ```bash
-goe repo grant-push <repo_address> <user_address> --chain-id <chain_id>
-goe repo revoke-push <repo_address> <user_address> --chain-id <chain_id>
+goe repo grant-push <repo_address> <user_address> [--chain-id <chain_id>]
+goe repo revoke-push <repo_address> <user_address> [--chain-id <chain_id>]
 ```
 
-### 3. Example Workflow
+### 5. Example Workflow
 
 #### 1). Create or unlock your wallet
 ```bash
