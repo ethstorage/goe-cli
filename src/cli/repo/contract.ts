@@ -1,6 +1,5 @@
 import { ethers, Contract } from "ethers";
-import { getWallet } from "../../core/wallet/index.js";
-import { GOEFactoryAbi, GOERepoAbi, Networks } from "../../core/config/index.js"
+import { GOEFactoryAbi, GOERepoAbi, Networks, WalletManager } from "../../core/index.js"
 
 export interface RepoInfo {
     address: string;
@@ -27,7 +26,7 @@ function getNetworkConfig(chainId: number) {
 }
 
 async function getSigner(chainId: number): Promise<ethers.Signer> {
-    const walletData = await getWallet();
+    const walletData = await WalletManager.getWallet();
     const netConfig = getNetworkConfig(chainId);
     const rpcUrl = randomRPC(netConfig.rpc);
     const provider = new ethers.JsonRpcProvider(rpcUrl);

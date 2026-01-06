@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
-import { EncryptedWalletFile } from '../types/wallet.js';
+import { EncryptedWalletFile } from './types.js';
 
 const WALLET_ROOT = join(homedir(), '.goe', 'wallets');
 
