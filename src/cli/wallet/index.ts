@@ -1,23 +1,12 @@
 // manager wallet CLI
 import chalk from "chalk";
 import { Command } from "commander";
-import {
-    createPrivateKeyWallet,
-    listWalletAddresses,
-    lockWallet,
-    manualUnlockWallet
-} from "../../core/wallet/index.js";
-import { getDecryptionKey } from "../../core/keychain/index.js";
+import { WalletManager } from "../../core/index.js";
 import { promptPassword } from "./utils.js";
 import { logger } from "../utils/log.js";
 
 const walletCmd = new Command('wallet')
     .description('Manage Ethereum wallets');
-
-function getFirstWalletAddress(): string | null {
-    const addresses = listWalletAddresses();
-    return addresses.length > 0 ? addresses[0] : null;
-}
 
 // Create a new wallet
 walletCmd
@@ -25,8 +14,7 @@ walletCmd
     .description('Create a new private key wallet')
     .action(async () => {
         try {
-            const addresses = listWalletAddresses();
-            if (addresses && addresses.length > 0) {
+            if (WalletManager.getDefaultAddress()) {
                 return logger.error('Wallet already exists.');
             }
 
@@ -36,7 +24,7 @@ walletCmd
                 return logger.error('Passwords do not match.');
             }
 
-            const { address, privateKey } = await createPrivateKeyWallet(password);
+            const { address, privateKey } = await WalletManager.createWallet(password);
             printWalletCreationSummary(address, privateKey);
         } catch (e: any) {
             logger.error(`Error: ${e.message}`);
@@ -50,13 +38,13 @@ walletCmd
     .description('Unlock the wallet (cache decryption key)')
     .action(async () => {
         try {
-            const address = getFirstWalletAddress();
+            const address = WalletManager.getDefaultAddress();
             if (!address) {
                 return logger.error("Wallet not found. Run 'goe wallet create' to create one.");
             }
 
             const password = promptPassword('Enter wallet password: ');
-            await manualUnlockWallet(address, password);
+            await WalletManager.unlockWallet(address, password);
             logger.success(`Wallet ${address} unlocked. (Derived key restored in keychain)`);
         } catch (e: any) {
             logger.error(`Error: ${e.message}`);
@@ -70,12 +58,12 @@ walletCmd
     .description('Lock the wallet (remove cached key)')
     .action(async () => {
         try {
-            const address = getFirstWalletAddress();
+            const address = WalletManager.getDefaultAddress();
             if (!address) {
                 return logger.error("Wallet not found. Run 'goe wallet create' to create one.");
             }
 
-            await lockWallet(address);
+            await WalletManager.lockWallet(address);
             logger.success(`Wallet ${address} locked. (Derived key removed from keychain).`);
         } catch (e: any) {
             logger.error(`Error: ${e.message}`);
@@ -88,28 +76,19 @@ walletCmd
     .command('list')
     .description('List all wallet addresses')
     .action(async () => {
-        const addresses = listWalletAddresses();
-        if (addresses.length === 0) {
+        const wallets = await WalletManager.listWalletsWithStatus();
+        if (wallets.length === 0) {
             return logger.info('No wallets found. Create one with `goe wallet create`');
         }
-        logger.info('Wallets:');
-        for (const addr of addresses) {
-            let status = 'locked';
-            try {
-                const decryptionKey = await getDecryptionKey(addr);
-                if (decryptionKey) {
-                    status = 'unlocked';
-                }
-            } catch {
-                status = 'locked';
-            }
 
-            const statusColor = status === 'unlocked' ? chalk.green : chalk.gray;
-            logger.info(`- ${addr} ${status === 'unlocked' ? statusColor('(🔓UNLOCKED)') : statusColor('(🔒LOCKED)')}`);
+        logger.info('Wallets:');
+        for (const { address, unlocked } of wallets) {
+            const statusColor = unlocked ? chalk.green : chalk.gray;
+            logger.info(`- ${address} ${statusColor(unlocked ? '(🔓UNLOCKED)' : '(🔒LOCKED)')}`);
         }
     });
 
-export function printWalletCreationSummary(address: string, privateKey: string) {
+function printWalletCreationSummary(address: string, privateKey: string) {
     const redBold = chalk.redBright.bold;
     const gold = chalk.hex('#FFD700').bold;
     const whiteBold = chalk.black.bold;

@@ -9,7 +9,7 @@ import {
     GOEProtocol, FetchRef, PackCreationResult,
     PushRecord, PushRef, Ref
 } from "../types/index.js";
-import { GOERepoAbi } from "../../core/config/index.js";
+import { GOERepoAbi, WalletManager } from "../../core/index.js";
 import {
     createCommitBoundaryPacks,
     findCommonAncestor,
@@ -21,7 +21,6 @@ import {
 } from "../utils/index.js";
 import { ContractDriver } from "./contract.js";
 
-import { getWallet } from "../../core/wallet/index.js";
 
 const ZERO_OID = "0000000000000000000000000000000000000000";
 const RPC_CONCURRENCY_LIMIT = 8;
@@ -51,7 +50,7 @@ class Goe {
     }
 
     static async create(gitdir: string, protocol: GOEProtocol): Promise<Goe> {
-        const decryptedWallet = await getWallet();
+        const decryptedWallet = await WalletManager.getWallet();
 
         const netConfig = protocol.netConfig;
         const rpcUrl = randomRPC(netConfig.rpc);

@@ -1,5 +1,5 @@
 import { Command, Option } from "commander";
-import {Factory, Repo, RepoInfo} from "./contract.js";
+import { Factory, Repo, RepoInfo } from "./contract.js";
 import { logger } from "../utils/log.js";
 
 
