@@ -1,9 +1,10 @@
 
 export const GOEFactoryAbi = [
-    "event RepoCreated(address indexed repo, address indexed creator, bytes repoName)",
+    "event RepoCreated(address indexed repo, address indexed owner, bytes repoName)",
     "function createRepo(bytes repoName) external returns (address)",
-    "function getUserRepoCount(address user) external view returns (uint256)",
-    "function getUserReposPaginated(address user, uint256 start, uint256 limit) external view returns (tuple(address repoAddress, uint256 creationTime, bytes repoName)[])"
+    "function getRepoCount(address user) external view returns (uint256)",
+    "function getReposPaginated(address user, uint256 start, uint256 limit) external view returns (tuple(address repoAddress, uint256 creationTime, bytes repoName)[])",
+    "function getRepoByName(address owner, bytes calldata repoName) external view returns (address)",
 ];
 
 

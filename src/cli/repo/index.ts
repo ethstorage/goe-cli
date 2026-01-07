@@ -52,7 +52,7 @@ repoCmd
         if (chainId === null) return logger.error("Chain ID not specified. Use --chain-id or set GOE_CHAIN_ID environment variable.");
 
         try {
-            const repos = await Factory.getUserReposPaginated(chainId, cmd.start, cmd.limit);
+            const repos = await Factory.getReposPaginated(chainId, cmd.start, cmd.limit);
             if (repos.length === 0) return logger.info(`No repositories found on chain ${chainId}.`);
 
             logger.success(`Found ${repos.length} repositories:`);
