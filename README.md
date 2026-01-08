@@ -33,16 +33,15 @@ For a deeper technical overview of GoE's architecture and on-chain Git mechanics
 
 ## `goe://` Protocol
 
-GoE introduces a custom Git protocol to access on-chain repositories.
+GoE repositories are identified on-chain by their contract addresses. The goe:// protocol lets you reference a repository in three ways:
 
-```bash
-goe://<repo_address>:<chain_id>
-```
+| URI Format                                 | Type      | Resolution Logic                               |
+|--------------------------------------------|-----------|------------------------------------------------|
+| ```goe://<repo_address>:<chain_id>```      | Canonical | Direct access via on-chain contract address    | 
+| ```goe://<repo_name>:<chain_id>```         | Shorthand | Resolves using your current wallet + repo name | 
+| ```goe://<owner>/<repo_name>:<chain_id>``` | Full Path | Resolves via any owner address + repo name     | 
 
-- `<repo_address>` — the smart contract address of the repository
-- `<chain_id>` — the chain ID where the repository is deployed
-
-> This protocol is automatically handled by the Git Helper installed with `goe-cli`. No additional setup is required.
+> **Note:** `<repo_address>` refers to the repository's smart contract; `<chain_id>` is the blockchain network ID.
 
 ---
 
@@ -104,7 +103,8 @@ goe wallet lock
 
 ### 4. Repo Command
 
-Create and manage on-chain repositories and permissions.
+> All goe repo commands work with repositories owned by the current wallet. You can refer to a repository either by its
+> name or by its contract address.
 
 - **Create a repository**
 ```bash
@@ -120,18 +120,18 @@ goe repo list [--chain-id <chain_id>]
 
 - **List branches**
 ```bash
-goe repo branches <repo_address> [--chain-id <chain_id>]
+goe repo branches <repo_address|repo_name> [--chain-id <chain_id>]
 ```
 
 - **Set default branch**
 ```bash
-goe repo default-branch <repo_address> <branch_name> [--chain-id <chain_id>]
+goe repo default-branch <repo_address|repo_name> <branch_name> [--chain-id <chain_id>]
 ```
 
 - **Grant / Revoke push access**
 ```bash
-goe repo grant-push <repo_address> <user_address> [--chain-id <chain_id>]
-goe repo revoke-push <repo_address> <user_address> [--chain-id <chain_id>]
+goe repo grant-push <repo_address|repo_name> <user_address> [--chain-id <chain_id>]
+goe repo revoke-push <repo_address|repo_name> <user_address> [--chain-id <chain_id>]
 ```
 
 ### 5. Example Workflow
@@ -182,12 +182,12 @@ GOE_GAS_INC_PCT=10 git push -u origin main
 #### 5). Set the default branch
 ```bash
 # Only needed if you want to change it later.
-goe repo default-branch <repo_address> master --chain-id 11155111
+goe repo default-branch <repo_address|repo_name> master --chain-id 11155111
 ```
 
 #### 6). Grant collaborator push access
 ```bash
-goe repo grant-push <repo_address> <collaborator_address> --chain-id 11155111
+goe repo grant-push <repo_address|repo_name> <collaborator_address> --chain-id 11155111
 ```
 
 

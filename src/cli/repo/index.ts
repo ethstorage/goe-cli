@@ -34,7 +34,9 @@ repoCmd
             logger.info(`Creating repository "${name}" on chain ${chainId}...`);
             const repoAddress = await Factory.createRepo(name, chainId);
             logger.success(`Repository created successfully: ${repoAddress}`);
-            logger.normal(`🔗 Access via: goe://${repoAddress}:${chainId}`);
+            logger.normal(`🔗 Access via:`);
+            logger.normal(`    goe://${repoAddress}:${chainId}     (recommended)`);
+            logger.normal(`    goe://${name}:${chainId}            (local alias, current wallet only)`);
         } catch (e: any) {
             logger.error(`Failed to create repository: ${e.message}`);
         }
@@ -57,7 +59,7 @@ repoCmd
 
             logger.success(`Found ${repos.length} repositories:`);
             repos.forEach((repo: RepoInfo, idx: number) => {
-                logger.normal(`${idx + 1}. ${repo.name} (${repo.address})  Created: ${repo.creationTime.toLocaleString()}`);
+                logger.normal(`${idx + 1}. ${repo.address} (${repo.name})  Created: ${repo.creationTime.toLocaleString()}`);
             });
         } catch (e: any) {
             logger.error(`Failed to fetch repositories: ${e.message}`);

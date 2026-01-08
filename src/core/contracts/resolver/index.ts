@@ -39,6 +39,7 @@ async function resolveByName(
     repoName: string
 ): Promise<string> {
     const factory = await getHubContract(chainId);
+    repoName = ethers.hexlify(ethers.toUtf8Bytes(repoName));
     const repo = await factory.getRepoByName(owner, repoName);
     if (!repo || repo === ZeroAddress) {
         throw new Error(`Repository "${owner}/${repoName}" not found`);
