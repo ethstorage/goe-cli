@@ -35,11 +35,11 @@ For a deeper technical overview of GoE's architecture and on-chain Git mechanics
 
 GoE repositories are identified on-chain by their contract addresses. The goe:// protocol lets you reference a repository in three ways:
 
-| URI Format                                 | Type      | Resolution Logic                               |
-|--------------------------------------------|-----------|------------------------------------------------|
-| ```goe://<repo_address>:<chain_id>```      | Canonical | Direct access via on-chain contract address    | 
-| ```goe://<repo_name>:<chain_id>```         | Shorthand | Resolves using your current wallet + repo name | 
-| ```goe://<owner>/<repo_name>:<chain_id>``` | Full Path | Resolves via any owner address + repo name     | 
+| URI Format                                 | Type      | Resolution Logic                                     |
+|--------------------------------------------|-----------|------------------------------------------------------|
+| ```goe://<repo_address>:<chain_id>```      | Canonical | Direct access via on-chain contract address          | 
+| ```goe://<repo_name>:<chain_id>```         | Shorthand | Resolves via the current wallet and repository name  | 
+| ```goe://<owner>/<repo_name>:<chain_id>``` | Full Path | Resolves via any owner’s address and repository name | 
 
 > **Note:** `<repo_address>` refers to the repository's smart contract; `<chain_id>` is the blockchain network ID.
 
