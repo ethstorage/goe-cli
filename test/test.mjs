@@ -11,7 +11,6 @@ const CHAIN_ID = 11155111;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '../test');
 const TEMP_DIR = path.join(PROJECT_ROOT, '/.tmp');
-const CLONE_DIR = path.join(TEMP_DIR, 'clone');
 
 const PRIVATE_KEY = process.env.GOE_TEST_PK;
 const PASSWORD = process.env.GOE_TEST_PASSWORD;
@@ -128,14 +127,14 @@ const setDefaultBranch = (addr) =>
 		);
 
 /* ------------------- Git flow ------------------- */
-async function gitFlow(repoAddress) {
+async function gitFlow(goe) {
 	const repoPath = path.join(TEMP_DIR, 'flow');
 	fs.mkdirSync(repoPath, { recursive: true });
 	process.chdir(repoPath);
 
 	// init + remote
 	await testCommandSpawn('git', ['init']);
-	await testCommandSpawn('git', ['remote', 'add', 'origin', `goe://${repoAddress}:${CHAIN_ID}`]);
+	await testCommandSpawn('git', ['remote', 'add', 'origin', goe]);
 	await testCommandSpawn('git', ['checkout', '-b', 'main']);
 
 	// init commit
@@ -161,12 +160,12 @@ async function gitFlow(repoAddress) {
 	await testCommandSpawn('git', ['push', 'origin', '--delete', 'feature']);
 }
 
-async function gitCloneVerify(repoAddress) {
+async function gitCloneVerify(goe) {
 	const clonePath = path.join(TEMP_DIR, 'clone');
 	fs.mkdirSync(clonePath, { recursive: true });
 	process.chdir(TEMP_DIR);
 
-	await testCommandSpawn('git', ['clone', `goe://${repoAddress}:${CHAIN_ID}`, clonePath]);
+	await testCommandSpawn('git', ['clone', goe, clonePath]);
 	process.chdir(clonePath);
 
 	const readme = fs.readFileSync(path.join(clonePath, 'README.md'), 'utf8');
@@ -179,12 +178,12 @@ async function gitCloneVerify(repoAddress) {
 	if (branches.includes('feature')) throw new Error('Deleted branch still exists');
 }
 
-async function gitRejectNonFastForward(repoAddress) {
+async function gitRejectNonFastForward(goe) {
 	const repoPath = path.join(TEMP_DIR, 'nff');
 	fs.mkdirSync(repoPath, { recursive: true });
 	process.chdir(repoPath);
 
-	await testCommandSpawn('git', ['clone', `goe://${repoAddress}:${CHAIN_ID}`, '.']);
+	await testCommandSpawn('git', ['clone', goe, '.']);
 
 	// push new file
 	fs.writeFileSync('nff.txt', '1');
@@ -204,12 +203,12 @@ async function gitRejectNonFastForward(repoAddress) {
 	}
 }
 
-async function gitMergePush(repoAddress) {
+async function gitMergePush(goe) {
 	const repoPath = path.join(TEMP_DIR, 'merge');
 	fs.mkdirSync(repoPath, { recursive: true });
 	process.chdir(repoPath);
 
-	await testCommandSpawn('git', ['clone', `goe://${repoAddress}:${CHAIN_ID}`, '.']);
+	await testCommandSpawn('git', ['clone', goe, '.']);
 
 	// create a branch and commit
 	await testCommandSpawn('git', ['checkout', '-b', 'merge-a']);
@@ -224,12 +223,12 @@ async function gitMergePush(repoAddress) {
 	await testCommandSpawn('git', ['push', 'origin', 'main']);
 }
 
-async function gitFetchUpdate(repoAddress) {
+async function gitFetchUpdate(goe) {
 	const repoPath = path.join(TEMP_DIR, 'fetch');
 	fs.mkdirSync(repoPath, { recursive: true });
 	process.chdir(repoPath);
 
-	await testCommandSpawn('git', ['clone', `goe://${repoAddress}:${CHAIN_ID}`, '.']);
+	await testCommandSpawn('git', ['clone', goe, '.']);
 
 	fs.writeFileSync('fetch.txt', 'x');
 	await testCommandSpawn('git', ['add', 'fetch.txt']);
@@ -239,7 +238,7 @@ async function gitFetchUpdate(repoAddress) {
 	// simulate fetch from another clone
 	const clonePath = path.join(TEMP_DIR, 'fetch-clone');
 	fs.mkdirSync(clonePath, { recursive: true });
-	await testCommandSpawn('git', ['clone', `goe://${repoAddress}:${CHAIN_ID}`, clonePath]);
+	await testCommandSpawn('git', ['clone', goe, clonePath]);
 	process.chdir(clonePath);
 
 	await testCommandSpawn('git', ['fetch', 'origin']);
@@ -271,12 +270,13 @@ async function npmLink() {
 	await listRepos();
 
 	// git helper
+	const goe = `goe://${name}:${CHAIN_ID}`
 	try {
-		await gitFlow(address);
-		await gitCloneVerify(address);
-		await gitRejectNonFastForward(address);
-		await gitMergePush(address);
-		await gitFetchUpdate(address);
+		await gitFlow(goe);
+		await gitCloneVerify(goe);
+		await gitRejectNonFastForward(goe);
+		await gitMergePush(goe);
+		await gitFetchUpdate(goe);
 	} finally {
 		cleanup();
 	}
