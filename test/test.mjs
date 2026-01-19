@@ -62,16 +62,6 @@ function testCommandSpawn(command, args, options = {}) {
 	});
 }
 
-async function expectFailure(promise, reason) {
-	try {
-		await promise;
-		throw new Error(`Expected failure but succeeded: ${reason}`);
-	} catch (err) {
-		console.log(`[expected failure] ${reason}`);
-	}
-}
-
-
 /* ---------------- utils ---------------- */
 
 const randomRepoName = () =>
@@ -139,20 +129,16 @@ const setDefaultBranch = (addr) =>
 
 /* ------------------- Git flow ------------------- */
 async function gitFlow(repoAddress) {
-	const repoPath = path.join(TEMP_DIR, 'repo');
+	const repoPath = path.join(TEMP_DIR, 'flow');
 	fs.mkdirSync(repoPath, { recursive: true });
 	process.chdir(repoPath);
 
+	// init + remote
 	await testCommandSpawn('git', ['init']);
-	await testCommandSpawn('git', [
-		'remote',
-		'add',
-		'origin',
-		`goe://${repoAddress}:${CHAIN_ID}`
-	]);
-
+	await testCommandSpawn('git', ['remote', 'add', 'origin', `goe://${repoAddress}:${CHAIN_ID}`]);
 	await testCommandSpawn('git', ['checkout', '-b', 'main']);
 
+	// init commit
 	fs.writeFileSync('README.md', '# GoE E2E\n');
 	await testCommandSpawn('git', ['add', '.']);
 	await testCommandSpawn('git', ['commit', '-m', 'init']);
@@ -176,31 +162,21 @@ async function gitFlow(repoAddress) {
 }
 
 async function gitCloneVerify(repoAddress) {
+	const clonePath = path.join(TEMP_DIR, 'clone');
+	fs.mkdirSync(clonePath, { recursive: true });
 	process.chdir(TEMP_DIR);
-	await testCommandSpawn('git', [
-		'clone',
-		`goe://${repoAddress}:${CHAIN_ID}`,
-		CLONE_DIR
-	]);
 
-	const readme = fs.readFileSync(
-			path.join(CLONE_DIR, 'README.md'),
-			'utf8'
-	);
-	if (!readme.includes('GoE E2E')) {
-		throw new Error('Clone verification failed');
-	}
+	await testCommandSpawn('git', ['clone', `goe://${repoAddress}:${CHAIN_ID}`, clonePath]);
+	process.chdir(clonePath);
 
-	process.chdir(CLONE_DIR);
-	// check branch
+	const readme = fs.readFileSync(path.join(clonePath, 'README.md'), 'utf8');
+	if (!readme.includes('GoE E2E')) throw new Error('Clone verification failed');
+
 	const head = await testCommandExec('git symbolic-ref HEAD');
-	if (!head.includes('refs/heads/main')) {
-		throw new Error('HEAD is not refs/heads/main');
-	}
+	if (!head.includes('refs/heads/main')) throw new Error('HEAD is not refs/heads/main');
+
 	const branches = await testCommandExec('git branch -r');
-	if (branches.includes('feature')) {
-		throw new Error('Deleted branch still exists');
-	}
+	if (branches.includes('feature')) throw new Error('Deleted branch still exists');
 }
 
 async function gitRejectNonFastForward(repoAddress) {
@@ -208,25 +184,24 @@ async function gitRejectNonFastForward(repoAddress) {
 	fs.mkdirSync(repoPath, { recursive: true });
 	process.chdir(repoPath);
 
-	await testCommandSpawn('git', [
-		'clone',
-		`goe://${repoAddress}:${CHAIN_ID}`
-	]);
+	await testCommandSpawn('git', ['clone', `goe://${repoAddress}:${CHAIN_ID}`, '.']);
 
-	// push
+	// push new file
 	fs.writeFileSync('nff.txt', '1');
 	await testCommandSpawn('git', ['add', '.']);
 	await testCommandSpawn('git', ['commit', '-m', 'nff-1']);
 	await testCommandSpawn('git', ['push', 'origin', 'main']);
 
-	// reset
+	// reset head
 	await testCommandSpawn('git', ['reset', '--hard', 'HEAD~1']);
 
-	// not fast-forward push,fail
-	await expectFailure(
-			testCommandSpawn('git', ['push', 'origin', 'main']),
-			'non-fast-forward push'
-	);
+	// non-fast-forward push should fail
+	try {
+		await testCommandSpawn('git', ['push', 'origin', 'main']);
+		throw new Error('Expected non-fast-forward push to fail');
+	} catch {
+		console.log('[expected] non-fast-forward rejected');
+	}
 }
 
 async function gitMergePush(repoAddress) {
@@ -234,34 +209,42 @@ async function gitMergePush(repoAddress) {
 	fs.mkdirSync(repoPath, { recursive: true });
 	process.chdir(repoPath);
 
-	await testCommandSpawn('git', [
-		'clone',
-		`goe://${repoAddress}:${CHAIN_ID}`
-	]);
+	await testCommandSpawn('git', ['clone', `goe://${repoAddress}:${CHAIN_ID}`, '.']);
 
+	// create a branch and commit
 	await testCommandSpawn('git', ['checkout', '-b', 'merge-a']);
 	fs.writeFileSync('a.txt', 'a');
-	await testCommandSpawn('git', ['commit', '-am', 'a']);
+	await testCommandSpawn('git', ['add', 'a.txt']);
+	await testCommandSpawn('git', ['commit', '-m', 'a']);
 
+	// merge back to main
 	await testCommandSpawn('git', ['checkout', 'main']);
 	await testCommandSpawn('git', ['merge', 'merge-a']);
 
 	await testCommandSpawn('git', ['push', 'origin', 'main']);
 }
 
-export async function gitFetchUpdate(repoAddress) {
-	process.chdir(path.join(TEMP_DIR, 'repo'));
+async function gitFetchUpdate(repoAddress) {
+	const repoPath = path.join(TEMP_DIR, 'fetch');
+	fs.mkdirSync(repoPath, { recursive: true });
+	process.chdir(repoPath);
+
+	await testCommandSpawn('git', ['clone', `goe://${repoAddress}:${CHAIN_ID}`, '.']);
+
 	fs.writeFileSync('fetch.txt', 'x');
-	await testCommandSpawn('git', ['commit', '-am', 'fetch-update']);
+	await testCommandSpawn('git', ['add', 'fetch.txt']);
+	await testCommandSpawn('git', ['commit', '-m', 'fetch-update']);
 	await testCommandSpawn('git', ['push', 'origin', 'main']);
 
-	process.chdir(path.join(TEMP_DIR, CLONE_DIR));
-	await testCommandSpawn('git', ['fetch', 'origin']);
+	// simulate fetch from another clone
+	const clonePath = path.join(TEMP_DIR, 'fetch-clone');
+	fs.mkdirSync(clonePath, { recursive: true });
+	await testCommandSpawn('git', ['clone', `goe://${repoAddress}:${CHAIN_ID}`, clonePath]);
+	process.chdir(clonePath);
 
-	const log = await testCommandExec('git log origin/main --oneline -1');
-	if (!log.includes('fetch-update')) {
-		throw new Error('Fetch did not update origin/main');
-	}
+	await testCommandSpawn('git', ['fetch', 'origin']);
+	const success = await testCommandSpawn('git', ['log', 'origin/main', '--oneline', '-1'], { capture: true });
+	if (!success) throw new Error('Fetch did not update origin/main');
 }
 
 

@@ -127,7 +127,12 @@ class Goe {
                 internalResult = `error ${dst} refusing to push to non-branch ref`;
             } else if (!force) {
                 // fast-forward push
-                internalResult = await this.handlePush(src, dst, gasIncPct)
+                if (src === "") {
+                    // delete
+                    internalResult = await this.handleBranchDeletion(dst, this.defaultBranch);
+                } else {
+                    internalResult = await this.handlePush(src, dst, gasIncPct)
+                }
             } else {
                 // force push or delete
                 if (src === "") {
