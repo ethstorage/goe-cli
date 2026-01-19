@@ -23,7 +23,7 @@ if (!PRIVATE_KEY || !PASSWORD) {
 
 
 /* -------- exec: capture stdout -------- */
-export const testCommandExec = (command) => {
+function testCommandExec(command) {
 	console.log(`\n[exec] ${command}`);
 	return new Promise((resolve, reject) => {
 		exec(command, (error, stdout, stderr) => {
@@ -40,10 +40,10 @@ export const testCommandExec = (command) => {
 			resolve(stdout || '');
 		});
 	});
-};
+}
 
 /* -------- spawn: realtime -------- */
-export const testCommandSpawn = (command, args, options = {}) => {
+function testCommandSpawn(command, args, options = {}) {
 	return new Promise((resolve, reject) => {
 		console.log(`\n[spawn] ${command} ${args.join(' ')}`);
 
@@ -60,7 +60,16 @@ export const testCommandSpawn = (command, args, options = {}) => {
 			resolve(true);
 		});
 	});
-};
+}
+
+async function expectFailure(promise, reason) {
+	try {
+		await promise;
+		throw new Error(`Expected failure but succeeded: ${reason}`);
+	} catch (err) {
+		console.log(`[expected failure] ${reason}`);
+	}
+}
 
 
 /* ---------------- utils ---------------- */
@@ -141,6 +150,7 @@ async function gitFlow(repoAddress) {
 		'origin',
 		`goe://${repoAddress}:${CHAIN_ID}`
 	]);
+
 	await testCommandSpawn('git', ['checkout', '-b', 'main']);
 
 	fs.writeFileSync('README.md', '# GoE E2E\n');
@@ -148,23 +158,25 @@ async function gitFlow(repoAddress) {
 	await testCommandSpawn('git', ['commit', '-m', 'init']);
 	await testCommandSpawn('git', ['push', 'origin', 'main']);
 
+	// feature branch
 	await testCommandSpawn('git', ['checkout', '-b', 'feature']);
 	fs.writeFileSync('feature.txt', 'feature\n');
 	await testCommandSpawn('git', ['add', '.']);
 	await testCommandSpawn('git', ['commit', '-m', 'feature']);
 	await testCommandSpawn('git', ['push', 'origin', 'feature']);
 
+	// force push
 	fs.writeFileSync('feature.txt', 'force\n');
 	await testCommandSpawn('git', ['add', '.']);
-	await testCommandSpawn('git', ['commit', '-m', `force-update`]);
+	await testCommandSpawn('git', ['commit', '-m', 'force-update']);
 	await testCommandSpawn('git', ['push', '--force', 'origin', 'feature']);
 
+	// delete branch
 	await testCommandSpawn('git', ['push', 'origin', '--delete', 'feature']);
 }
 
 async function gitCloneVerify(repoAddress) {
 	process.chdir(TEMP_DIR);
-
 	await testCommandSpawn('git', [
 		'clone',
 		`goe://${repoAddress}:${CHAIN_ID}`,
@@ -180,17 +192,85 @@ async function gitCloneVerify(repoAddress) {
 	}
 
 	process.chdir(CLONE_DIR);
+	// check branch
+	const head = await testCommandExec('git symbolic-ref HEAD');
+	if (!head.includes('refs/heads/main')) {
+		throw new Error('HEAD is not refs/heads/main');
+	}
 	const branches = await testCommandExec('git branch -r');
 	if (branches.includes('feature')) {
 		throw new Error('Deleted branch still exists');
 	}
 }
 
+async function gitRejectNonFastForward(repoAddress) {
+	const repoPath = path.join(TEMP_DIR, 'nff');
+	fs.mkdirSync(repoPath, { recursive: true });
+	process.chdir(repoPath);
+
+	await testCommandSpawn('git', [
+		'clone',
+		`goe://${repoAddress}:${CHAIN_ID}`
+	]);
+
+	// push
+	fs.writeFileSync('nff.txt', '1');
+	await testCommandSpawn('git', ['add', '.']);
+	await testCommandSpawn('git', ['commit', '-m', 'nff-1']);
+	await testCommandSpawn('git', ['push', 'origin', 'main']);
+
+	// reset
+	await testCommandSpawn('git', ['reset', '--hard', 'HEAD~1']);
+
+	// not fast-forward push,fail
+	await expectFailure(
+			testCommandSpawn('git', ['push', 'origin', 'main']),
+			'non-fast-forward push'
+	);
+}
+
+async function gitMergePush(repoAddress) {
+	const repoPath = path.join(TEMP_DIR, 'merge');
+	fs.mkdirSync(repoPath, { recursive: true });
+	process.chdir(repoPath);
+
+	await testCommandSpawn('git', [
+		'clone',
+		`goe://${repoAddress}:${CHAIN_ID}`
+	]);
+
+	await testCommandSpawn('git', ['checkout', '-b', 'merge-a']);
+	fs.writeFileSync('a.txt', 'a');
+	await testCommandSpawn('git', ['commit', '-am', 'a']);
+
+	await testCommandSpawn('git', ['checkout', 'main']);
+	await testCommandSpawn('git', ['merge', 'merge-a']);
+
+	await testCommandSpawn('git', ['push', 'origin', 'main']);
+}
+
+export async function gitFetchUpdate(repoAddress) {
+	process.chdir(path.join(TEMP_DIR, 'repo'));
+	fs.writeFileSync('fetch.txt', 'x');
+	await testCommandSpawn('git', ['commit', '-am', 'fetch-update']);
+	await testCommandSpawn('git', ['push', 'origin', 'main']);
+
+	process.chdir(path.join(TEMP_DIR, CLONE_DIR));
+	await testCommandSpawn('git', ['fetch', 'origin']);
+
+	const log = await testCommandExec('git log origin/main --oneline -1');
+	if (!log.includes('fetch-update')) {
+		throw new Error('Fetch did not update origin/main');
+	}
+}
+
+
 function cleanup() {
 	process.chdir(PROJECT_ROOT);
 	fs.rmSync(TEMP_DIR, { recursive: true, force: true });
 	console.log('Local test data cleaned');
 }
+
 /* ------------------- main ------------------- */
 async function npmLink() {
 	console.log('\nLinking local goe-cli...');
@@ -211,13 +291,15 @@ async function npmLink() {
 	try {
 		await gitFlow(address);
 		await gitCloneVerify(address);
+		await gitRejectNonFastForward(address);
+		await gitMergePush(address);
+		await gitFetchUpdate(address);
 	} finally {
 		cleanup();
 	}
 
 	await listBranches(address);
 	await setDefaultBranch(address);
-
 	await lockWallet();
 	console.log('\n=== GoE E2E test finished successfully ===');
 })().catch((e) => {
