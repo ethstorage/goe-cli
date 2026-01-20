@@ -1,5 +1,10 @@
-import { ethers, Contract } from "ethers";
-import { GOEFactoryAbi, GOERepoAbi, Networks, WalletManager } from "../../core/index.js"
+import { ethers } from "ethers";
+import {
+    GOEFactoryAbi,
+    WalletManager,
+    validateAddress, randomRPC, getNetworkConfig,
+    resolveRepoAddress, getHubContract, getRepoContract
+} from "../../core/index.js"
 
 export interface RepoInfo {
     address: string;
@@ -12,17 +17,10 @@ export interface RepoInfo {
  * Common Helpers
  * ============================
  */
-
-function randomRPC(rpcs: string[]): string {
-    return rpcs[Math.floor(Math.random() * rpcs.length)];
-}
-
-function getNetworkConfig(chainId: number) {
-    const config = Networks[chainId];
-    if (!config) {
-        throw new Error(`Unsupported chain ID: ${chainId}.`);
-    }
-    return config;
+function getOwner(): string {
+    const address = WalletManager.getDefaultAddress();
+    if (!address) throw new Error(`Wallet not found. Please run 'goe wallet create' to create it.`);
+    return address;
 }
 
 async function getSigner(chainId: number): Promise<ethers.Signer> {
@@ -41,18 +39,6 @@ async function waitForTx(tx: ethers.ContractTransactionResponse, action: string)
     return receipt;
 }
 
-function validateAddress(address: string, label = "address") {
-    if (!ethers.isAddress(address)) {
-        throw new Error(`Invalid ${label}: ${address}`);
-    }
-}
-
-async function getRepoContract(repoAddress: string, chainId: number) {
-    validateAddress(repoAddress, "repoAddress");
-    const signer = await getSigner(chainId);
-    return new Contract(repoAddress, GOERepoAbi, signer);
-}
-
 /**
  * ============================
  * Factory Contract Methods
@@ -61,9 +47,7 @@ async function getRepoContract(repoAddress: string, chainId: number) {
 export namespace Factory {
     export async function createRepo(repoName: string, chainId: number): Promise<string> {
         const signer = await getSigner(chainId);
-        const { hubAddress } = getNetworkConfig(chainId);
-
-        const factory = new Contract(hubAddress, GOEFactoryAbi, signer);
+        const factory = await getHubContract(chainId, signer);
         const tx = await factory.createRepo(ethers.toUtf8Bytes(repoName));
         const receipt = await waitForTx(tx, "createRepo");
 
@@ -79,17 +63,15 @@ export namespace Factory {
         throw new Error("Transaction succeeded but no 'RepoCreated' event found");
     }
 
-    export async function getUserReposPaginated(
+    export async function getReposPaginated(
         chainId: number,
         start = 0,
         limit = 50
     ): Promise<RepoInfo[]> {
-        const signer = await getSigner(chainId);
-        const { hubAddress } = getNetworkConfig(chainId);
+        const factory = await getHubContract(chainId);
+        const owner = getOwner();
 
-        const userAddress = await signer.getAddress();
-        const factory = new Contract(hubAddress, GOEFactoryAbi, signer);
-        const repos = await factory.getUserReposPaginated(userAddress, start, limit);
+        const repos = await factory.getReposPaginated(owner, start, limit);
         return repos.map((r: any) => ({
             address: r.repoAddress,
             name: ethers.toUtf8String(r.repoName),
@@ -103,14 +85,27 @@ export namespace Factory {
  * Repository Contract Methods
  * ============================
  */
-export namespace Repo {
-    export async function setDefaultBranch(repoAddress: string, chainId: number, branchName: string) {
-        const repo = await getRepoContract(repoAddress, chainId);
+function normalizeBranchName(branch: string): string {
+    if (branch.startsWith("refs/")) return branch;
 
+    // tags
+    if (branch.startsWith("tags/")) {
+        return `refs/${branch}`;
+    }
+
+    // heads
+    return `refs/heads/${branch}`;
+}
+
+export namespace Repo {
+    export async function setDefaultBranch(repoNamespace: string, chainId: number, branchName: string) {
+        const signer = await getSigner(chainId);
+        const repoAddress = await resolveRepoAddress(chainId, repoNamespace, getOwner());
+        const repo = await getRepoContract(repoAddress, chainId, signer);
         const fullName = normalizeBranchName(branchName);
 
         // check
-        const branches = await Repo.listBranches(repoAddress, chainId);
+        const branches = await Repo.listBranches(repoAddress, chainId, repo);
         const exists = branches.some(b => normalizeBranchName(b.name) === fullName);
         if (!exists) {
             throw new Error(
@@ -122,41 +117,50 @@ export namespace Repo {
         await waitForTx(tx, "setDefaultBranch");
     }
 
-    export async function addPusher(repoAddress: string, chainId: number, account: string) {
+    export async function addPusher(repoNamespace: string, chainId: number, account: string) {
         validateAddress(account, "account");
-        const repo = await getRepoContract(repoAddress, chainId);
+        const signer = await getSigner(chainId);
+        const repoAddress = await resolveRepoAddress(chainId, repoNamespace, getOwner());
+        const repo = await getRepoContract(repoAddress, chainId, signer);
         const tx = await repo.addPusher(account);
         await waitForTx(tx, "addPusher");
     }
 
-    export async function removePusher(repoAddress: string, chainId: number, account: string) {
+    export async function removePusher(repoNamespace: string, chainId: number, account: string) {
         validateAddress(account, "account");
-        const repo = await getRepoContract(repoAddress, chainId);
+        const signer = await getSigner(chainId);
+        const repoAddress = await resolveRepoAddress(chainId, repoNamespace, getOwner());
+        const repo = await getRepoContract(repoAddress, chainId, signer);
         const tx = await repo.removePusher(account);
         await waitForTx(tx, "removePusher");
     }
 
-    export async function addMaintainer(repoAddress: string, chainId: number, account: string) {
+    export async function addMaintainer(repoNamespace: string, chainId: number, account: string) {
         validateAddress(account, "account");
-        const repo = await getRepoContract(repoAddress, chainId);
+        const signer = await getSigner(chainId);
+        const repoAddress = await resolveRepoAddress(chainId, repoNamespace, getOwner());
+        const repo = await getRepoContract(repoAddress, chainId, signer);
         const tx = await repo.addMaintainer(account);
         await waitForTx(tx, "addMaintainer");
     }
 
-    export async function canPush(repoAddress: string, chainId: number, account: string) {
+    export async function canPush(repoNamespace: string, chainId: number, account: string) {
         validateAddress(account, "account");
+        const repoAddress = await resolveRepoAddress(chainId, repoNamespace, getOwner());
         const repo = await getRepoContract(repoAddress, chainId);
         return repo.canPush(account);
     }
 
-    export async function canForcePush(repoAddress: string, chainId: number, refName: string, account: string) {
+    export async function canForcePush(repoNamespace: string, chainId: number, refName: string, account: string) {
         validateAddress(account, "account");
+        const repoAddress = await resolveRepoAddress(chainId, repoNamespace, getOwner());
         const repo = await getRepoContract(repoAddress, chainId);
         return repo.canForcePush(account, ethers.toUtf8Bytes(refName));
     }
 
-    export async function listBranches(repoAddress: string, chainId: number, pageSize: number = 50) {
-        const repo = await getRepoContract(repoAddress, chainId);
+    export async function listBranches(repoNamespace: string, chainId: number, repoContract?: ethers.Contract) {
+        const pageSize = 50;
+        const repo = repoContract ?? await getRepoContract(await resolveRepoAddress(chainId, repoNamespace, getOwner()), chainId);
 
         let start = 0;
         const all: { name: string; hash: string }[] = [];
@@ -185,7 +189,8 @@ export namespace Repo {
         return all;
     }
 
-    export async function getDefaultBranch(repoAddress: string, chainId: number) {
+    export async function getDefaultBranch(repoNamespace: string, chainId: number) {
+        const repoAddress = await resolveRepoAddress(chainId, repoNamespace, getOwner());
         const repo = await getRepoContract(repoAddress, chainId);
         const [refBytes,] = await repo.getDefaultBranch();
         if (refBytes.length === 0) {
@@ -198,16 +203,4 @@ export namespace Repo {
                 ? branch.replace("refs/", "")
                 : branch;
     }
-}
-
-function normalizeBranchName(branch: string): string {
-    if (branch.startsWith("refs/")) return branch;
-
-    // tags
-    if (branch.startsWith("tags/")) {
-        return `refs/${branch}`;
-    }
-
-    // heads
-    return `refs/heads/${branch}`;
 }

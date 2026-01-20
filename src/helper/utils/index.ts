@@ -2,7 +2,7 @@ import URLParse from "url-parse"
 import pLimit from "p-limit";
 import { ethers } from "ethers";
 
-import { Networks } from "../../core/index.js"
+import { Networks, resolveRepoAddress, WalletManager } from "../../core/index.js"
 import { GOEProtocol, NegotiationResult, PushRecord } from "../types/index.js";
 import { getLocalCommitOids } from "./git-helper.js";
 import { ContractDriver } from "../core/contract.js";
@@ -10,29 +10,34 @@ import { ContractDriver } from "../core/contract.js";
 export * from './log.js';
 export * from './git-helper.js';
 
+function getOwner(): string {
+    const address = WalletManager.getDefaultAddress();
+    if (!address) throw new Error(`Wallet not found. Please run 'goe wallet create' to create it.`);
+    return address;
+}
+
 export async function parseGoeURI(uri: string): Promise<GOEProtocol> {
-    const url = new URLParse(uri)
-    let hostname = url.hostname
-    if (!hostname || !ethers.isAddress(hostname)) {
-        throw new Error("invalid goe uri, no contract address")
+    const url = new URLParse(uri);
+
+    const chainId = Number(url.port);
+    if (!chainId) throw new Error("invalid goe uri, no chainId");
+
+    const netConfig = Networks[chainId];
+    if (!netConfig) throw new Error(`Not Support chainId: ${chainId}`);
+
+    const repoNamespace = url.hostname + url.pathname;
+    const defaultOwner = getOwner();
+    const repoAddress: string = await resolveRepoAddress(chainId, repoNamespace, defaultOwner);
+    if (!repoAddress || !ethers.isAddress(repoAddress)) {
+        throw new Error("invalid goe uri, no contract address");
     }
-
-    let chainId = url.port ? parseInt(url.port) : null
-    if (!chainId) throw new Error("invalid goe uri, no chainId")
-
-    let netConfig = Networks[chainId]
-    if (!netConfig) throw new Error(`Not Support chainId: ${chainId}`)
 
     return {
         remoteUrl: uri,
-        repoAddress: hostname,
+        repoAddress: repoAddress,
         chainId,
         netConfig,
     }
-}
-
-export function randomRPC(rpcs: string[]): string {
-    return rpcs[Math.floor(Math.random() * rpcs.length)]
 }
 
 const DEFAULT_NEGOTIATION_RESULT: NegotiationResult = {

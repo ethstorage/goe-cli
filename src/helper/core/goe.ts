@@ -9,14 +9,13 @@ import {
     GOEProtocol, FetchRef, PackCreationResult,
     PushRecord, PushRef, Ref
 } from "../types/index.js";
-import { GOERepoAbi, WalletManager } from "../../core/index.js";
+import { GOERepoAbi, WalletManager, randomRPC } from "../../core/index.js";
 import {
     createCommitBoundaryPacks,
     findCommonAncestor,
     findMatchingLocalBranch,
     getOidFromRef,
     log,
-    randomRPC,
     runGitPackFromFile
 } from "../utils/index.js";
 import { ContractDriver } from "./contract.js";
