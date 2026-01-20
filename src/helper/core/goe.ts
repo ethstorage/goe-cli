@@ -128,10 +128,9 @@ class Goe {
             } else if (!force) {
                 // fast-forward push
                 if (src === "") {
-                    // delete
                     internalResult = await this.handleBranchDeletion(dst, this.defaultBranch);
                 } else {
-                    internalResult = await this.handlePush(src, dst, gasIncPct)
+                    internalResult = await this.handlePush(src, dst, gasIncPct);
                 }
             } else {
                 // force push or delete
