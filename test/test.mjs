@@ -2,11 +2,11 @@
 import 'dotenv/config';
 import path from 'path';
 import fs from 'fs';
-import { exec, spawn } from 'child_process';
+import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const DIST_CLI = path.resolve('./dist/cli/index.js');
-const CHAIN_ID = 11155111;
+const CHAIN_ID = '11155111';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '../test');
@@ -22,41 +22,40 @@ if (!PRIVATE_KEY || !PASSWORD) {
 
 
 /* -------- exec: capture stdout -------- */
-function testCommandExec(command) {
-	console.log(`\n[exec] ${command}`);
-	return new Promise((resolve, reject) => {
-		exec(command, (error, stdout, stderr) => {
-			if (error) {
-				console.error(error.message);
-				return reject(error);
-			}
-			if (stderr) {
-				console.error(stderr.trim());
-			}
-			if (stdout) {
-				console.log(stdout.trim());
-			}
-			resolve(stdout || '');
-		});
-	});
-}
+export function runCommand(cmd, args = [], options = {}) {
+	const {
+		capture = false,
+		env = {},
+		cwd,
+	} = options;
 
-/* -------- spawn: realtime -------- */
-function testCommandSpawn(command, args, options = {}) {
 	return new Promise((resolve, reject) => {
-		console.log(`\n[spawn] ${command} ${args.join(' ')}`);
-
-		const p = spawn(command, args, {
-			stdio: 'inherit',
-			shell: true,
-			...options
+		const child = spawn(cmd, args, {
+			shell: false,                // ⭐
+			stdio: capture ? 'pipe' : 'inherit',
+			env: { ...process.env, ...env },
+			cwd,
 		});
 
-		p.on('close', (code) => {
+		let stdout = '';
+		let stderr = '';
+
+		if (capture) {
+			child.stdout.on('data', d => (stdout += d));
+			child.stderr.on('data', d => (stderr += d));
+		}
+
+		child.on('error', reject);
+
+		child.on('close', (code) => {
 			if (code !== 0) {
-				return reject(new Error(`Process exited with code ${code}`));
+				return reject(
+						new Error(
+								stderr.trim() || `Command failed: ${cmd} ${args.join(' ')}`
+						)
+				);
 			}
-			resolve(true);
+			resolve(capture ? stdout : true);
 		});
 	});
 }
@@ -72,7 +71,7 @@ const stripAnsi = (s) =>
 
 /* ------------------- Wallet ------------------- */
 async function checkWalletExists() {
-	const out = await testCommandExec(`node ${DIST_CLI} wallet list`);
+	const out = await runCommand('node', [DIST_CLI, 'wallet', 'list'], { capture: true });
 	if (out.includes('No wallets found')) {
 		throw new Error('No wallet exists. Create and fund one first.');
 	}
@@ -80,29 +79,28 @@ async function checkWalletExists() {
 
 async function unlockWallet() {
 	console.log('Unlocking wallet using GOE_TEST_PASSWORD...');
-	await testCommandSpawn(
+	await runCommand(
 			'node',
 			[DIST_CLI, 'wallet', 'unlock'],
 			{
 				env: {
-					...process.env,
 					GOE_TEST_MODE: '1',
-					GOE_TEST_PASSWORD: PASSWORD
-				}
+					GOE_TEST_PASSWORD: PASSWORD,
+				},
 			}
 	);
 }
 
 const lockWallet = () =>
-		testCommandExec(
-				`node ${DIST_CLI} wallet lock`
-		);
+		runCommand('node', [DIST_CLI, 'wallet', 'lock']);
 
 /* ------------------- Repo ------------------- */
 async function createRepo() {
 	const name = randomRepoName();
-	const out = await testCommandExec(
-			`node ${DIST_CLI} repo create ${name} --chain-id ${CHAIN_ID}`
+	const out = await runCommand(
+			'node',
+			[DIST_CLI, 'repo', 'create', name, '--chain-id', CHAIN_ID],
+			{ capture: true }
 	);
 	const match = stripAnsi(out).match(/0x[a-fA-F0-9]{40}/);
 	if (!match) {
@@ -113,18 +111,13 @@ async function createRepo() {
 }
 
 const listRepos = () =>
-		testCommandExec(`node ${DIST_CLI} repo list --chain-id ${CHAIN_ID}`);
+		runCommand('node', [DIST_CLI, 'repo', 'list', '--chain-id', CHAIN_ID]);
 
 const listBranches = (addr) =>
-		testCommandExec(
-				`node ${DIST_CLI} repo branches ${addr} --chain-id ${CHAIN_ID}`
-		);
+		runCommand('node', [DIST_CLI, 'repo', 'branches', addr, '--chain-id', CHAIN_ID],);
 
 const setDefaultBranch = (addr) =>
-		testCommandSpawn(
-				'node',
-				[DIST_CLI, 'repo', 'default-branch', addr, 'main', '--chain-id', CHAIN_ID]
-		);
+		runCommand('node', [DIST_CLI, 'repo', 'default-branch', addr, 'main', '--chain-id', CHAIN_ID],);
 
 /* ------------------- Git flow ------------------- */
 async function gitFlow(goe) {
@@ -133,31 +126,31 @@ async function gitFlow(goe) {
 	process.chdir(repoPath);
 
 	// init + remote
-	await testCommandSpawn('git', ['init']);
-	await testCommandSpawn('git', ['remote', 'add', 'origin', goe]);
-	await testCommandSpawn('git', ['checkout', '-b', 'main']);
+	await runCommand('git', ['init']);
+	await runCommand('git', ['remote', 'add', 'origin', goe]);
+	await runCommand('git', ['checkout', '-b', 'main']);
 
 	// init commit
 	fs.writeFileSync('README.md', '# GoE E2E\n');
-	await testCommandSpawn('git', ['add', '.']);
-	await testCommandSpawn('git', ['commit', '-m', 'init']);
-	await testCommandSpawn('git', ['push', 'origin', 'main']);
+	await runCommand('git', ['add', '.']);
+	await runCommand('git', ['commit', '-m', 'init']);
+	await runCommand('git', ['push', 'origin', 'main']);
 
 	// feature branch
-	await testCommandSpawn('git', ['checkout', '-b', 'feature']);
+	await runCommand('git', ['checkout', '-b', 'feature']);
 	fs.writeFileSync('feature.txt', 'feature\n');
-	await testCommandSpawn('git', ['add', '.']);
-	await testCommandSpawn('git', ['commit', '-m', 'feature']);
-	await testCommandSpawn('git', ['push', 'origin', 'feature']);
+	await runCommand('git', ['add', '.']);
+	await runCommand('git', ['commit', '-m', 'feature']);
+	await runCommand('git', ['push', 'origin', 'feature']);
 
 	// force push
 	fs.writeFileSync('feature.txt', 'force\n');
-	await testCommandSpawn('git', ['add', '.']);
-	await testCommandSpawn('git', ['commit', '-m', 'force-update']);
-	await testCommandSpawn('git', ['push', '--force', 'origin', 'feature']);
+	await runCommand('git', ['add', '.']);
+	await runCommand('git', ['commit', '-m', 'force-update']);
+	await runCommand('git', ['push', '--force', 'origin', 'feature']);
 
 	// delete branch
-	await testCommandSpawn('git', ['push', 'origin', '--delete', 'feature']);
+	await runCommand('git', ['push', 'origin', '--delete', 'feature']);
 }
 
 async function gitCloneVerify(goe) {
@@ -165,16 +158,16 @@ async function gitCloneVerify(goe) {
 	fs.mkdirSync(clonePath, { recursive: true });
 	process.chdir(TEMP_DIR);
 
-	await testCommandSpawn('git', ['clone', goe, clonePath]);
+	await runCommand('git', ['clone', goe, clonePath]);
 	process.chdir(clonePath);
 
 	const readme = fs.readFileSync(path.join(clonePath, 'README.md'), 'utf8');
 	if (!readme.includes('GoE E2E')) throw new Error('Clone verification failed');
 
-	const head = await testCommandExec('git symbolic-ref HEAD');
+	const head = await runCommand('git',['symbolic-ref', 'HEAD'], { capture: true });
 	if (!head.includes('refs/heads/main')) throw new Error('HEAD is not refs/heads/main');
 
-	const branches = await testCommandExec('git branch -r');
+	const branches = await runCommand('git', ['branch', '-r'], { capture: true });
 	if (branches.includes('feature')) throw new Error('Deleted branch still exists');
 }
 
@@ -183,20 +176,20 @@ async function gitRejectNonFastForward(goe) {
 	fs.mkdirSync(repoPath, { recursive: true });
 	process.chdir(repoPath);
 
-	await testCommandSpawn('git', ['clone', goe, '.']);
+	await runCommand('git', ['clone', goe, '.']);
 
 	// push new file
 	fs.writeFileSync('nff.txt', '1');
-	await testCommandSpawn('git', ['add', '.']);
-	await testCommandSpawn('git', ['commit', '-m', 'nff-1']);
-	await testCommandSpawn('git', ['push', 'origin', 'main']);
+	await runCommand('git', ['add', '.']);
+	await runCommand('git', ['commit', '-m', 'nff-1']);
+	await runCommand('git', ['push', 'origin', 'main']);
 
 	// reset head
-	await testCommandSpawn('git', ['reset', '--hard', 'HEAD~1']);
+	await runCommand('git', ['reset', '--hard', 'HEAD~1']);
 
 	// non-fast-forward push should fail
 	try {
-		await testCommandSpawn('git', ['push', 'origin', 'main']);
+		await runCommand('git', ['push', 'origin', 'main']);
 		throw new Error('Expected non-fast-forward push to fail');
 	} catch {
 		console.log('[expected] non-fast-forward rejected');
@@ -208,19 +201,19 @@ async function gitMergePush(goe) {
 	fs.mkdirSync(repoPath, { recursive: true });
 	process.chdir(repoPath);
 
-	await testCommandSpawn('git', ['clone', goe, '.']);
+	await runCommand('git', ['clone', goe, '.']);
 
 	// create a branch and commit
-	await testCommandSpawn('git', ['checkout', '-b', 'merge-a']);
+	await runCommand('git', ['checkout', '-b', 'merge-a']);
 	fs.writeFileSync('a.txt', 'a');
-	await testCommandSpawn('git', ['add', 'a.txt']);
-	await testCommandSpawn('git', ['commit', '-m', 'a']);
+	await runCommand('git', ['add', 'a.txt']);
+	await runCommand('git', ['commit', '-m', 'a']);
 
 	// merge back to main
-	await testCommandSpawn('git', ['checkout', 'main']);
-	await testCommandSpawn('git', ['merge', 'merge-a']);
+	await runCommand('git', ['checkout', 'main']);
+	await runCommand('git', ['merge', 'merge-a']);
 
-	await testCommandSpawn('git', ['push', 'origin', 'main']);
+	await runCommand('git', ['push', 'origin', 'main']);
 }
 
 async function gitFetchUpdate(goe) {
@@ -228,21 +221,21 @@ async function gitFetchUpdate(goe) {
 	fs.mkdirSync(repoPath, { recursive: true });
 	process.chdir(repoPath);
 
-	await testCommandSpawn('git', ['clone', goe, '.']);
+	await runCommand('git', ['clone', goe, '.']);
 
 	fs.writeFileSync('fetch.txt', 'x');
-	await testCommandSpawn('git', ['add', 'fetch.txt']);
-	await testCommandSpawn('git', ['commit', '-m', 'fetch-update']);
-	await testCommandSpawn('git', ['push', 'origin', 'main']);
+	await runCommand('git', ['add', 'fetch.txt']);
+	await runCommand('git', ['commit', '-m', 'fetch-update']);
+	await runCommand('git', ['push', 'origin', 'main']);
 
 	// simulate fetch from another clone
 	const clonePath = path.join(TEMP_DIR, 'fetch-clone');
 	fs.mkdirSync(clonePath, { recursive: true });
-	await testCommandSpawn('git', ['clone', goe, clonePath]);
+	await runCommand('git', ['clone', goe, clonePath]);
 	process.chdir(clonePath);
 
-	await testCommandSpawn('git', ['fetch', 'origin']);
-	const success = await testCommandSpawn('git', ['log', 'origin/main', '--oneline', '-1'], { capture: true });
+	await runCommand('git', ['fetch', 'origin']);
+	const success = await runCommand('git', ['log', 'origin/main', '--oneline', '-1'], { capture: true });
 	if (!success) throw new Error('Fetch did not update origin/main');
 }
 
@@ -256,7 +249,7 @@ function cleanup() {
 /* ------------------- main ------------------- */
 async function npmLink() {
 	console.log('\nLinking local goe-cli...');
-	await testCommandSpawn('npm', ['link']);
+	await runCommand('npm', ['link']);
 }
 
 (async () => {
