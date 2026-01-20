@@ -12,10 +12,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '../test');
 const TEMP_DIR = path.join(PROJECT_ROOT, '/.tmp');
 
-const PRIVATE_KEY = process.env.GOE_TEST_PK;
 const PASSWORD = process.env.GOE_TEST_PASSWORD;
 
-if (!PRIVATE_KEY || !PASSWORD) {
+if (!PASSWORD) {
 	console.error('Please set GOE_TEST_PK and GOE_TEST_PASSWORD in .env');
 	process.exit(1);
 }
