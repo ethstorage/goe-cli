@@ -16,10 +16,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'yarn'
 
-      - run: npm ci
+      - run: yarn install
 
-      - run: npm run build
+      - run: yarn build
 
       - name: Run Wallet Create CI Test
         run: node test/createWalletCI.mjs
