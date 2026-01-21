@@ -2,8 +2,6 @@ name: goe-wallet-ci
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
 
 jobs:
   wallet-create:
