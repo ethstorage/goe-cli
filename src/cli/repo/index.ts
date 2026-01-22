@@ -45,16 +45,14 @@ repoCmd
 // List repositories
 repoCmd
     .command("list")
-    .description("List repositories owned by the current wallet on the specified chain")
+    .description("List all repositories owned by the current wallet on the specified chain")
     .addOption(chainIdOption)
-    .option("-s, --start <number>", "Start index", (val) => parseInt(val, 10), 0)
-    .option("-l, --limit <number>", "Items per page", (val) => parseInt(val, 10), 20)
     .action(async (cmd) => {
         const chainId = resolveChainId(cmd);
         if (chainId === null) return logger.error("Chain ID not specified. Use --chain-id or set GOE_CHAIN_ID environment variable.");
 
         try {
-            const repos = await Factory.getReposPaginated(chainId, cmd.start, cmd.limit);
+            const repos = await Factory.getAllRepos(chainId);
             if (repos.length === 0) return logger.info(`No repositories found on chain ${chainId}.`);
 
             logger.success(`Found ${repos.length} repositories:`);

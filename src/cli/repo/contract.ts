@@ -63,6 +63,23 @@ export namespace Factory {
         throw new Error("Transaction succeeded but no 'RepoCreated' event found");
     }
 
+    export async function getAllRepos(chainId: number): Promise<RepoInfo[]> {
+        const allRepos: RepoInfo[] = [];
+        let start = 0;
+        const limit = 50;
+
+        while (true) {
+            const batch = await getReposPaginated(chainId, start, limit);
+            if (batch.length === 0) break;
+
+            allRepos.push(...batch);
+            if (batch.length < limit) break;
+            start += limit;
+        }
+
+        return allRepos;
+    }
+
     export async function getReposPaginated(
         chainId: number,
         start = 0,
