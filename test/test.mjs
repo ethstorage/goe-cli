@@ -208,7 +208,13 @@ function cleanup() {
 }
 
 /* ------------------- main ------------------- */
-async function npmLink() {
+async function npmPrepareAndLink() {
+	console.log('\nPreparing local goe-cli...');
+
+	// 1. build
+	await runCommand('npm', ['run', 'build']);
+
+	// 2. link
 	console.log('\nLinking local goe-cli...');
 	await runCommand('npm', ['link']);
 }
@@ -217,7 +223,7 @@ async function npmLink() {
 	fs.mkdirSync(TEMP_DIR, { recursive: true });
 
 	// goe
-	await npmLink();
+	await npmPrepareAndLink();
 	await checkWalletExists();
 	await unlockWallet();
 	const {name, address} = await createRepo();

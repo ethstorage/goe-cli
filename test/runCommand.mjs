@@ -1,6 +1,14 @@
 /* -------- exec: capture stdout -------- */
 import {spawn} from "child_process";
 
+const SHELL_CMDS = new Set([
+	'npm',
+	'pnpm',
+	'yarn',
+	'npx',
+]);
+
+
 export function runCommand(cmd, args = [], options = {}) {
 	const {
 		capture = false,
@@ -8,9 +16,10 @@ export function runCommand(cmd, args = [], options = {}) {
 		cwd,
 	} = options;
 
+	const useShell = SHELL_CMDS.has(cmd);
 	return new Promise((resolve, reject) => {
 		const child = spawn(cmd, args, {
-			shell: false,                // ⭐
+			shell: useShell,                // ⭐
 			stdio: capture ? 'pipe' : 'inherit',
 			env: { ...process.env, ...env },
 			cwd,
