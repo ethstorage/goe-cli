@@ -15,7 +15,7 @@ const TEMP_DIR = path.join(PROJECT_ROOT, '/.tmp');
 const PASSWORD = process.env.GOE_TEST_PASSWORD;
 
 if (!PASSWORD) {
-	console.error('Please set GOE_TEST_PK and GOE_TEST_PASSWORD in .env');
+	console.error('Please set "GOE_TEST_PASSWORD" in .env');
 	process.exit(1);
 }
 
