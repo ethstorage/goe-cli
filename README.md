@@ -18,35 +18,6 @@ With GoE, your code is:
 
 ---
 
-## How GoE Works
-
-GoE uses a three-layer model for seamless Git integration:
-
-1. **Git Remote Helper** — handles the `goe://` protocol for all Git commands.
-2. **[Ethereum Smart Contracts](https://github.com/ethstorage/goe-contracts)** — manage branches, commits, and access permissions on-chain.
-3. **EthStorage (EIP-4844 Blob)** — stores large Git data objects efficiently on Ethereum L2.
-
-📘 **Design Document:**  
-For a deeper technical overview of GoE's architecture and on-chain Git mechanics, see our [design doc](https://github.com/ethstorage/ethfs-git/pull/1/files).
-
----
-
-## `goe://` Protocol
-
-GoE repositories are identified on-chain by their contract addresses. The goe:// protocol lets you reference a repository in three ways:
-
-| URI Format                                 | Type      | Resolution Logic                                     |
-|--------------------------------------------|-----------|------------------------------------------------------|
-| ```goe://<repo_address>:<chain_id>```      | Canonical | Direct access via on-chain contract address          | 
-| ```goe://<repo_name>:<chain_id>```         | Shorthand | Resolves via the current wallet and repository name  | 
-| ```goe://<owner>/<repo_name>:<chain_id>``` | Full Path | Resolves via any owner’s address and repository name | 
-
-> **Note:** `<repo_address>` refers to the repository's smart contract; `<chain_id>` is the blockchain network ID.
-
----
-
-
-
 ## Getting Started
 
 ### 1. Install the CLI
@@ -189,6 +160,63 @@ goe repo default-branch <repo_address|repo_name> master --chain-id 11155111
 ```bash
 goe repo grant-push <repo_address|repo_name> <collaborator_address> --chain-id 11155111
 ```
+
+---
+
+## How GoE Works
+
+GoE uses a three-layer model for seamless Git integration:
+
+1. **Git Remote Helper** — handles the `goe://` protocol for all Git commands.
+2. **[Ethereum Smart Contracts](https://github.com/ethstorage/goe-contracts)** — manage branches, commits, and access permissions on-chain.
+3. **EthStorage (EIP-4844 Blob)** — stores large Git data objects efficiently on Ethereum L2.
+
+📘 **Design Document:**  
+For a deeper technical overview of GoE's architecture and on-chain Git mechanics, see our [design doc](https://github.com/ethstorage/ethfs-git/pull/1/files).
+
+---
+
+## `goe://` Protocol
+
+Each GoE repository has a canonical on-chain contract address.
+The `goe://` protocol lets you reference the same repository in multiple human-readable ways:
+
+| URI Format                                         | Resolution Logic                                                   |
+|----------------------------------------------------|--------------------------------------------------------------------|
+| ```goe://<repo_contract_address>:<chain_id>```     | Canonical, unambiguous reference to a deployed repository contract | 
+| ```goe://<owner_address>:<chain_id>/<repo_name>``` | Owner address + repository name                                    | 
+| ```goe://<ens_name>:<chain_id>/<repo_name>```      | ENS-based, human-readable form (recommended)                       | 
+
+- ```<chain_id>``` specifies the blockchain network where the repository exists.
+- ```<repo_name>``` must follow on-chain validation rules (alphanumeric and -._, max 100 chars).
+
+### Resolution Rules
+- Contract address → used directly
+- Otherwise → `<owner>` (address or ENS) + `<repo_name>` → resolved on-chain
+
+### Notes
+- Shorthand `goe://<repo_name>` **not supported** in Git remotes
+- `goe CLI` may accept `<repo_name>` for repositories owned by the current wallet
+
+---
+
+
+## Advanced: ENS & Local Wallet Mapping (Optional)
+
+Your Local Wallet (via `goe wallet create`) handles Git operations.  
+For ENS URLs (`goe://yourname.eth:1/repo`), map your ENS to this wallet to allow Git access.
+
+### How to link your Local Wallet to ENS:
+
+1). Run `goe wallet list` → copy Local Wallet address
+2). Add an ENS Text Record: 
+Use an ENS manager (e.g., [ens.domains](ens.domains)) with your Primary Wallet to add a Text Record to your domain:
+- Key: `goe://`
+- Value: `0xYourLocalWalletAddress`
+
+When someone (or your CLI) accesses goe://yourname.eth:1/repo, GoE will query the record and automatically use your Local Wallet address as the owner.
+
+---
 
 
 ## Additional Reference
